@@ -1,282 +1,98 @@
 body {
     font-family: 'M PLUS Rounded 1c', 'Noto Sans JP', sans-serif;
-    background-color: #eef2f3;
+    background: linear-gradient(to bottom, #87ceeb, #f0f8ff 70%); /* 空のような背景 */
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
     margin: 0;
-    -webkit-user-select: none;
-    user-select: none;
+    -webkit-user-select: none; user-select: none;
 }
-.hidden { display: none; }
-#start-screen {
-    text-align: center;
-    background-color: white;
-    padding: 20px 30px 30px;
-    border-radius: 20px;
-    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
-    width: 90%;
-    max-width: 450px;
-}
-#start-screen h1 {
+.hidden { display: none !important; }
+
+/* --- タイトル画面 --- */
+#title-screen { text-align: center; }
+.main-title {
+    font-size: 3rem;
     color: #003366;
-    border-bottom: 4px solid #fdd835;
-    padding-bottom: 10px;
+    text-shadow: 2px 2px 4px #fff;
+    margin-bottom: 40px;
 }
-#region-selector {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-    margin-top: 20px;
-}
-.region-button {
-    padding: 15px;
-    font-size: 1.1rem;
-    font-weight: bold;
+.title-buttons { display: flex; flex-direction: column; gap: 20px; }
+.title-button {
+    font-size: 1.5rem;
+    font-weight: 700;
     color: white;
-    background-color: #007bff;
+    background: linear-gradient(to bottom, #4caf50, #388e3c);
+    padding: 15px 30px;
     border: none;
-    border-radius: 10px;
+    border-radius: 50px;
     cursor: pointer;
+    box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+    transition: transform 0.1s;
+}
+.title-button:active { transform: scale(0.95); }
+#how-to-play-button { background: linear-gradient(to bottom, #007bff, #0056b3); }
+
+/* --- メインメニュー画面 --- */
+#main-menu-screen {
+    text-align: center; background-color: white; padding: 20px 30px 30px;
+    border-radius: 20px; box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    width: 90%; max-width: 450px;
+}
+#main-menu-screen h1 { color: #003366; border-bottom: 4px solid #fdd835; padding-bottom: 10px; }
+#region-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+.region-button {
+    padding: 15px; font-size: 1.1rem; font-weight: bold; color: white;
+    background-color: #007bff; border: none; border-radius: 10px; cursor: pointer;
     transition: background-color 0.2s;
 }
 .region-button:hover { background-color: #0056b3; }
-.region-button:active { transform: scale(0.95); }
+.back-button {
+    margin-top: 20px; padding: 8px 15px; font-size: 1rem; color: #fff;
+    background-color: #6c757d; border: none; border-radius: 8px; cursor: pointer;
+}
+
+/* --- ゲーム画面コンテナ --- */
 .container {
-    background-color: #ffffff;
-    padding: 20px;
-    border-radius: 20px;
-    border: 3px solid #b0bec5;
-    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-    text-align: center;
-    width: 90%;
-    max-width: 450px;
-    position: relative;
+    background-color: #ffffff; padding: 20px; border-radius: 20px;
+    border: 3px solid #b0bec5; box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    text-align: center; width: 90%; max-width: 450px; position: relative;
 }
-#hint-area {
-    background-color: #333333;
-    padding: 10px;
-    border-radius: 5px;
-    margin: 15px 0;
-}
-.hint-text {
-    color: #ff9900;
-    font-weight: bold;
-    font-size: 1rem;
-    margin: 5px 0;
-    min-height: 24px;
-}
-.hint-text:not(:empty) {
-    padding: 5px;
-    background: rgba(0,0,0,0.2);
-    border-radius: 4px;
-}
-#hint-button {
-    background-color: #00bcd4;
-    color: white;
-    font-size: 1rem;
-    padding: 8px 15px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    margin-top: 5px;
-}
-#hint-button:disabled {
-    background-color: #555;
-    cursor: default;
-}
-#hint-image {
-    max-width: 100%;
-    height: 120px;
-    object-fit: cover;
-    border-radius: 8px;
-    margin-bottom: 10px;
-    background-color: #eee;
-}
-.grid {
-    display: grid;
-    gap: 8px;
-    margin: 15px auto;
-}
+
+/* (以下、既存のスタイル - 変更点は少ない) */
+#hint-area { background-color: #333; padding: 10px; border-radius: 5px; margin: 15px 0; }
+.hint-text { color: #ff9900; font-weight: bold; font-size: 1rem; margin: 5px 0; min-height: 24px; }
+.hint-text:not(:empty) { padding: 5px; background: rgba(0,0,0,0.2); border-radius: 4px; }
+#hint-button { background-color: #00bcd4; color: white; font-size: 1rem; padding: 8px 15px; border: none; border-radius: 8px; cursor: pointer; margin-top: 5px; }
+#hint-button:disabled { background-color: #555; cursor: default; }
+#hint-image { max-width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; background-color: #eee; }
+.grid { display: grid; gap: 8px; margin: 15px auto; }
 .choices-grid { grid-template-columns: repeat(4, 1fr); }
-.answer-grid {
-    border: 3px solid #546e7a;
-    padding: 8px;
-    border-radius: 10px;
-    min-height: 70px;
-    align-items: center;
-}
-.cell {
-    width: 100%;
-    aspect-ratio: 1 / 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 1.8rem;
-    border-radius: 8px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: transform 0.1s, box-shadow 0.2s;
-}
-.choice-cell {
-    background-color: #e0f7fa;
-    border: 2px solid #00acc1;
-    color: #00796b;
-}
+.answer-grid { border: 3px solid #546e7a; padding: 8px; border-radius: 10px; min-height: 70px; align-items: center; }
+.cell { width: 100%; aspect-ratio: 1 / 1; display: flex; justify-content: center; align-items: center; font-size: 1.8rem; border-radius: 8px; font-weight: bold; cursor: pointer; transition: transform 0.1s, box-shadow 0.2s; }
+.choice-cell { background-color: #e0f7fa; border: 2px solid #00acc1; color: #00796b; }
 .answer-cell { background-color: #eceff1; }
 #message-area { height: 120px; }
-#message-text {
-    font-size: 1.5rem;
-    font-weight: bold;
-    margin: 0;
-}
-#score-text {
-    font-size: 1.8rem;
-    font-weight: bold;
-    color: #d32f2f;
-    margin: 10px 0 0;
-}
-.correct { color: #388e3c; }
-.normal { color: #1976d2; }
-.good { color: #f57c00; }
-.amazing { color: #d32f2f; }
-.button-area {
-    margin-top: 10px;
-    display: flex;
-    justify-content: center;
-    gap: 15px;
-    align-items: center;
-    height: 50px;
-}
-#next-button {
-    background: linear-gradient(to bottom, #4caf50, #388e3c);
-    color: white;
-    font-size: 1.2rem;
-    font-weight: bold;
-    padding: 12px 25px;
-    border: none;
-    border-radius: 25px;
-    cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-#pass-button {
-    background: #a0a0a0;
-    color: white;
-    font-size: 1.1rem;
-    font-weight: bold;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 20px;
-    cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-#reset-button {
-    background: #ffb300;
-    color: white;
-    font-size: 1.1rem;
-    font-weight: bold;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 20px;
-    cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-#final-coin-text {
-    font-size: 1.5rem;
-    font-weight: 900;
-    color: #007bff;
-    margin-top: 15px;
-    padding: 10px;
-    background-color: #eef2f3;
-    border-radius: 10px;
-}
-#coin-display-game {
-    position: absolute;
-    top: 15px;
-    right: 20px;
-    font-size: 1.2rem;
-    font-weight: 900;
-    color: #fff;
-    background-color: #fdd835;
-    padding: 5px 15px;
-    border-radius: 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    border: 2px solid #fff;
-}
-#coin-display-gacha {
-    font-size: 1.2rem;
-    font-weight: bold;
-    color: #333;
-    margin-bottom: 10px;
-}
-#gacha-section {
-    margin-top: 30px;
-    padding-top: 20px;
-    border-top: 2px dashed #ccc;
-}
-#slot-machine {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    margin-bottom: 15px;
-}
-.reel {
-    width: 60px;
-    height: 80px;
-    background-color: #222;
-    color: #fff;
-    font-size: 40px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border-radius: 10px;
-    border: 3px solid #555;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-}
-#play-gacha-button {
-    background: linear-gradient(to bottom, #f44336, #d32f2f);
-    color: white;
-    font-size: 1.2rem;
-    font-weight: bold;
-    padding: 10px 25px;
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-#gacha-result {
-    margin-top: 10px;
-    font-size: 1.2rem;
-    font-weight: bold;
-    height: 25px;
-}
-#event-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.6);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
-.modal-content {
-    background-color: white;
-    padding: 30px;
-    border-radius: 20px;
-    text-align: center;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-}
-#close-modal-button {
-    background-color: #007bff;
-    color: white;
-    font-size: 1.2rem;
-    padding: 10px 30px;
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
-    margin-top: 10px;
-}
+#message-text { font-size: 1.5rem; font-weight: bold; margin: 0; }
+#score-text { font-size: 1.8rem; font-weight: bold; color: #d32f2f; margin: 10px 0 0; }
+.correct { color: #388e3c; } .normal { color: #1976d2; } .good { color: #f57c00; } .amazing { color: #d32f2f; }
+.button-area { margin-top: 10px; display: flex; justify-content: center; gap: 15px; align-items: center; height: 50px; }
+#next-button { background: linear-gradient(to bottom, #4caf50, #388e3c); color: white; font-size: 1.2rem; font-weight: bold; padding: 12px 25px; border: none; border-radius: 25px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+#pass-button { background: #a0a0a0; color: white; font-size: 1.1rem; font-weight: bold; padding: 10px 20px; border: none; border-radius: 20px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+#reset-button { background: #ffb300; color: white; font-size: 1.1rem; font-weight: bold; padding: 10px 20px; border: none; border-radius: 20px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+#final-coin-text { font-size: 1.5rem; font-weight: 900; color: #007bff; margin-top: 15px; padding: 10px; background-color: #eef2f3; border-radius: 10px; }
+#coin-display-game { position: absolute; top: 15px; right: 20px; font-size: 1.2rem; font-weight: 900; color: #fff; background-color: #fdd835; padding: 5px 15px; border-radius: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border: 2px solid #fff; }
+#coin-display-gacha { font-size: 1.2rem; font-weight: bold; color: #333; margin-bottom: 10px; }
+#gacha-section { margin-top: 30px; padding-top: 20px; border-top: 2px dashed #ccc; }
+#slot-machine { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
+.reel { width: 60px; height: 80px; background-color: #222; color: #fff; font-size: 40px; display: flex; justify-content: center; align-items: center; border-radius: 10px; border: 3px solid #555; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
+#play-gacha-button { background: linear-gradient(to bottom, #f44336, #d32f2f); color: white; font-size: 1.2rem; font-weight: bold; padding: 10px 25px; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+#gacha-result { margin-top: 10px; font-size: 1.2rem; font-weight: bold; height: 25px; }
+
+/* --- ポップアップ（モーダル）共通スタイル --- */
+.modal-background { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+.modal-content { background-color: white; padding: 30px; border-radius: 20px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+.modal-content h2 { margin-top: 0; }
+.modal-close-button { background-color: #007bff; color: white; font-size: 1.2rem; padding: 10px 30px; border: none; border-radius: 10px; cursor: pointer; margin-top: 10px; }
+.how-to-play-text { text-align: left; display: inline-block; }
