@@ -17,7 +17,7 @@ let allQuestions = [];
 let gameQuestions = [];
 let currentQuestionIndex = 0;
 let correctAnswers = 0;
-let draggedItem = null;
+let selectedCell = null; // ★ドラッグ操作の代わりに、選択したセルを記憶する変数
 const QUESTIONS_PER_GAME = 20;
 
 // --- 初期化処理 ---
@@ -67,19 +67,17 @@ function loadQuestion() {
     clearUIForNewQuestion();
     passButton.classList.remove('hidden');
     resetButton.classList.remove('hidden');
-
     if (currentQuestionIndex >= gameQuestions.length) {
         showResult();
         return;
     }
-
     nextButton.textContent = 'つぎのえきへ';
     nextButton.onclick = nextQuestion;
     const question = gameQuestions[currentQuestionIndex];
     displayHint(question);
     createAnswerGrid(question.answer.length);
     createChoicesGrid(question.answer);
-    addDragAndDropListeners();
+    addClickListeners(); // ★ドラッグ＆ドロップの代わりにクリックリスナーをセット
 }
 
 function showResult() {
@@ -89,12 +87,9 @@ function showResult() {
     choicesGrid.innerHTML = '';
     passButton.classList.add('hidden');
     resetButton.classList.add('hidden');
-    
     const total = gameQuestions.length;
     const percentage = total > 0 ? (correctAnswers / total) * 100 : 0;
-    
-    let resultMessage = '';
-    let messageClass = '';
+    let resultMessage = '', messageClass = '';
     if (percentage === 100) {
         resultMessage = 'パーフェクト！きみは鉄道はかせだ！';
         messageClass = 'amazing';
@@ -110,9 +105,7 @@ function showResult() {
     }
     messageText.textContent = resultMessage;
     messageText.className = messageClass;
-
     scoreText.textContent = `${total}問中 ${correctAnswers}問 正解！`;
-
     nextButton.textContent = 'ちいきせんたくへもどる';
     nextButton.classList.remove('hidden');
     nextButton.onclick = () => {
@@ -139,6 +132,10 @@ function clearUIForNewQuestion() {
     answerArea.innerHTML = '';
     choicesGrid.innerHTML = '';
     choicesGrid.style.display = 'grid';
+    if (selectedCell) {
+        selectedCell.classList.remove('selected');
+        selectedCell = null;
+    }
 }
 
 function displayHint(question) {
@@ -167,7 +164,6 @@ function createChoicesGrid(answer) {
         const cell = document.createElement('div');
         cell.classList.add('cell', 'choice-cell');
         cell.textContent = char;
-        cell.draggable = true;
         choicesGrid.appendChild(cell);
     });
 }
@@ -178,7 +174,6 @@ function checkAnswer() {
     const answer = gameQuestions[currentQuestionIndex].answer;
     let currentAnswer = Array.from(answerCells).map(cell => cell.textContent).join('');
     if (currentAnswer.length !== answer.length) return;
-    
     if (currentAnswer === answer) {
         messageText.textContent = 'せいかい！';
         messageText.className = 'correct';
@@ -186,37 +181,53 @@ function checkAnswer() {
         nextButton.classList.remove('hidden');
         passButton.classList.add('hidden');
         resetButton.classList.add('hidden');
-        document.querySelectorAll('.choice-cell[draggable="true"]').forEach(c => c.draggable = false);
     } else {
         messageText.textContent = 'ちがうみたい…';
         messageText.className = '';
     }
 }
 
-function addDragAndDropListeners() {
-    const draggableItems = document.querySelectorAll('[draggable="true"]');
-    const answerCells = document.querySelectorAll('.answer-cell');
-    draggableItems.forEach(item => {
-        item.addEventListener('dragstart', e => {
-            draggedItem = e.target;
-            e.target.classList.add('dragging');
-        });
-        item.addEventListener('dragend', e => e.target.classList.remove('dragging'));
+// ▼▼▼ この関数をまるごと書き換え ▼▼▼
+function addClickListeners() {
+    const cells = document.querySelectorAll('.cell');
+    cells.forEach(cell => {
+        cell.addEventListener('click', onCellClick);
     });
-    answerCells.forEach(item => {
-        item.addEventListener('dragover', e => e.preventDefault());
-        item.addEventListener('drop', e => {
-            e.preventDefault();
-            if (draggedItem && !item.textContent) {
-                item.textContent = draggedItem.textContent;
-                draggedItem.textContent = '';
-                draggedItem.draggable = false;
-                draggedItem.style.cursor = 'default';
-                draggedItem = null;
-                checkAnswer();
-            }
-        });
-    });
+}
+
+function onCellClick(event) {
+    const clickedCell = event.currentTarget;
+    
+    // すでに正解している場合は何もしない
+    if (messageText.textContent === 'せいかい！') return;
+
+    // 1. 選択中のセルがある場合
+    if (selectedCell) {
+        // 1a. クリックしたのが空のセルなら、文字を移動
+        if (!clickedCell.textContent) {
+            clickedCell.textContent = selectedCell.textContent;
+            selectedCell.textContent = '';
+            selectedCell.classList.remove('selected');
+            selectedCell = null;
+            checkAnswer();
+        // 1b. クリックしたのが選択中のセル自身なら、選択を解除
+        } else if (clickedCell === selectedCell) {
+            selectedCell.classList.remove('selected');
+            selectedCell = null;
+        // 1c. クリックしたのが別の文字入りセルなら、選択を切り替え
+        } else {
+            selectedCell.classList.remove('selected');
+            selectedCell = clickedCell;
+            selectedCell.classList.add('selected');
+        }
+    // 2. 選択中のセルがない場合
+    } else {
+        // 2a. クリックしたセルに文字があれば、それを選択
+        if (clickedCell.textContent) {
+            selectedCell = clickedCell;
+            selectedCell.classList.add('selected');
+        }
+    }
 }
 
 // --- ユーティリティ関数 ---
