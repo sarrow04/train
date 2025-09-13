@@ -8,20 +8,33 @@ const answerArea = document.getElementById('answer-area');
 const choicesGrid = document.getElementById('choices-grid');
 const messageText = document.getElementById('message-text');
 const scoreText = document.getElementById('score-text');
+const finalCoinText = document.getElementById('final-coin-text');
 const nextButton = document.getElementById('next-button');
 const passButton = document.getElementById('pass-button');
 const resetButton = document.getElementById('reset-button');
+const coinDisplayGame = document.getElementById('coin-display-game');
+const coinDisplayGacha = document.getElementById('coin-display-gacha');
+const eventModal = document.getElementById('event-modal');
+const closeModalButton = document.getElementById('close-modal-button');
+const playGachaButton = document.getElementById('play-gacha-button');
+const reels = document.querySelectorAll('.reel');
+const gachaResult = document.getElementById('gacha-result');
 
 // --- グローバル変数 ---
 let allQuestions = [];
 let gameQuestions = [];
 let currentQuestionIndex = 0;
 let correctAnswers = 0;
-// selectedCell変数は不要になったので削除
+let userCoins = 0;
+let isBonusTime = false;
 const QUESTIONS_PER_GAME = 20;
+const GACHA_COST = 10;
+const GACHA_SYMBOLS = ['🚃', '🚅', '🚂', '🚃', '🚅', '🚂', '🚆']; // 🚆が当たり
 
 // --- 初期化処理 ---
 async function initialize() {
+    userCoins = parseInt(localStorage.getItem('trainPuzzleCoins')) || 0;
+    updateCoinDisplay();
     try {
         const response = await fetch('lines.json');
         if (!response.ok) { throw new Error('Network response was not ok'); }
@@ -31,6 +44,12 @@ async function initialize() {
         console.error('路線のデータの読み込みに失敗しました:', error);
         startScreen.innerHTML = '<h1>エラー</h1><p>路線データを読み込めませんでした。<br>lines.jsonファイルを確認してください。</p>';
     }
+}
+
+// --- コイン表示を更新する関数 ---
+function updateCoinDisplay() {
+    coinDisplayGame.textContent = `コイン: ${userCoins}`;
+    coinDisplayGacha.textContent = `コイン: ${userCoins}`;
 }
 
 // --- 画面表示とゲームフロー ---
@@ -106,6 +125,7 @@ function showResult() {
     messageText.textContent = resultMessage;
     messageText.className = messageClass;
     scoreText.textContent = `${total}問中 ${correctAnswers}問 正解！`;
+    finalCoinText.textContent = `のこりコイン: ${userCoins}枚`;
     nextButton.textContent = 'ちいきせんたくへもどる';
     nextButton.classList.remove('hidden');
     nextButton.onclick = () => {
@@ -120,18 +140,21 @@ function nextQuestion() {
     loadQuestion();
 }
 
+// --- イベントリスナー ---
 resetButton.addEventListener('click', () => loadQuestion());
 passButton.addEventListener('click', () => nextQuestion());
+closeModalButton.addEventListener('click', () => eventModal.classList.add('hidden'));
+playGachaButton.addEventListener('click', playGacha);
 
 // --- UI生成と更新 ---
 function clearUIForNewQuestion() {
     messageText.textContent = '';
     messageText.className = '';
     scoreText.textContent = '';
+    finalCoinText.textContent = '';
     nextButton.classList.add('hidden');
     answerArea.innerHTML = '';
     choicesGrid.innerHTML = '';
-    choicesGrid.style.display = 'grid';
 }
 
 function displayHint(question) {
@@ -153,22 +176,14 @@ function createAnswerGrid(length) {
     }
 }
 
-// ▼▼▼ バグ修正：正解の文字が必ず含まれるようにロジックを修正 ▼▼▼
 function createChoicesGrid(answer) {
-    let choiceChars = [...answer]; // 1. まず正解の文字をすべて入れる
+    let choiceChars = [...answer];
     const dummyChars = generateDummyChars(answer);
-    
-    // 2. 12マスに足りない分だけダミー文字を追加する
-    for(let i = 0; i < dummyChars.length; i++) {
-        if (choiceChars.length < 12) {
-            choiceChars.push(dummyChars[i]);
-        } else {
-            break;
-        }
+    for (let i = 0; i < dummyChars.length; i++) {
+        if (choiceChars.length < 12) choiceChars.push(dummyChars[i]);
+        else break;
     }
-
-    const shuffledChars = shuffle(choiceChars); // 3. 最後にシャッフルする
-
+    const shuffledChars = shuffle(choiceChars);
     shuffledChars.forEach(char => {
         const cell = document.createElement('div');
         cell.classList.add('cell', 'choice-cell');
@@ -182,68 +197,109 @@ function checkAnswer() {
     const answerCells = document.querySelectorAll('.answer-cell');
     const answer = gameQuestions[currentQuestionIndex].answer;
     let currentAnswer = Array.from(answerCells).map(cell => cell.textContent).join('');
+    
     if (currentAnswer.length !== answer.length) {
-        // 答えが入力途中なら、メッセージをクリア
         messageText.textContent = '';
         messageText.className = '';
         return;
     }
+
     if (currentAnswer === answer) {
         messageText.textContent = 'せいかい！';
         messageText.className = 'correct';
+        const earnedCoins = isBonusTime ? 2 : 1;
+        userCoins += earnedCoins;
+        isBonusTime = false;
+        localStorage.setItem('trainPuzzleCoins', userCoins);
+        updateCoinDisplay();
         correctAnswers++;
         nextButton.classList.remove('hidden');
         passButton.classList.add('hidden');
         resetButton.classList.add('hidden');
+        if (correctAnswers > 0 && correctAnswers % 5 === 0 && currentQuestionIndex < gameQuestions.length -1) {
+            isBonusTime = true;
+            showEventModal();
+        }
     } else {
         messageText.textContent = 'ちがうみたい…';
         messageText.className = '';
     }
 }
 
-// ▼▼▼ 新操作方法：タップしたときの動きを全面的に変更 ▼▼▼
+function showEventModal() {
+    eventModal.classList.remove('hidden');
+}
+
+// --- 新操作方法（タップ式）---
 function addEventListeners() {
-    // 選択肢マス（下）と回答マス（上）に別々のイベントを設定
     choicesGrid.addEventListener('click', onChoiceCellClick);
     answerArea.addEventListener('click', onAnswerCellClick);
 }
 
-// 下の選択肢マスがタップされたときの処理
 function onChoiceCellClick(event) {
     const clickedCell = event.target;
-    // .choice-cellクラスではない、または文字がない場合は何もしない
-    if (!clickedCell.classList.contains('choice-cell') || !clickedCell.textContent || messageText.textContent === 'せいかい！') {
-        return;
-    }
-
-    // 上の回答マスの中から、最初の空きマスを探す
+    if (!clickedCell.classList.contains('choice-cell') || !clickedCell.textContent || messageText.textContent === 'せいかい！') return;
     const emptyAnswerCell = document.querySelector('.answer-cell:empty');
     if (emptyAnswerCell) {
-        // 空きマスに文字を移動
         emptyAnswerCell.textContent = clickedCell.textContent;
         clickedCell.textContent = '';
-        checkAnswer(); // 答えが揃ったかチェック
+        checkAnswer();
     }
 }
 
-// 上の回答マスがタップされたときの処理
 function onAnswerCellClick(event) {
     const clickedCell = event.target;
-    // .answer-cellクラスではない、または文字がない場合は何もしない
-    if (!clickedCell.classList.contains('answer-cell') || !clickedCell.textContent || messageText.textContent === 'せいかい！') {
-        return;
-    }
-
-    // 下の選択肢マスの中から、最初の空きマスを探す
+    if (!clickedCell.classList.contains('answer-cell') || !clickedCell.textContent || messageText.textContent === 'せいかい！') return;
     const emptyChoiceCell = document.querySelector('.choice-cell:empty');
     if (emptyChoiceCell) {
-        // 空きマスに文字を戻す
         emptyChoiceCell.textContent = clickedCell.textContent;
         clickedCell.textContent = '';
-        checkAnswer(); // 答えの状態を更新
+        checkAnswer();
     }
 }
 
+// --- 電車スロット ---
+function playGacha() {
+    if (userCoins < GACHA_COST) {
+        gachaResult.textContent = 'コインがたりません';
+        return;
+    }
+    userCoins -= GACHA_COST;
+    updateCoinDisplay();
+    gachaResult.textContent = '';
+    let spinCount = 0;
+    const maxSpins = 20;
+    const finalResult = [
+        GACHA_SYMBOLS[Math.floor(Math.random() * GACHA_SYMBOLS.length)],
+        GACHA_SYMBOLS[Math.floor(Math.random() * GACHA_SYMBOLS.length)],
+        GACHA_SYMBOLS[Math.floor(Math.random() * GACHA_SYMBOLS.length)]
+    ];
+    const spinInterval = setInterval(() => {
+        spinCount++;
+        reels.forEach((reel, index) => {
+            reel.textContent = GACHA_SYMBOLS[Math.floor(Math.random() * GACHA_SYMBOLS.length)];
+            if (spinCount >= maxSpins) reel.textContent = finalResult[index];
+        });
+        if (spinCount >= maxSpins) {
+            clearInterval(spinInterval);
+            checkGachaResult(finalResult);
+        }
+    }, 100);
+}
+
+function checkGachaResult(result) {
+    if (result.every(s => s === '🚆')) {
+        gachaResult.textContent = '大当たり！1000コインGET！';
+        userCoins += 1000;
+    } else if (result[0] === result[1] && result[1] === result[2]) {
+        gachaResult.textContent = 'おめでとう！50コインGET！';
+        userCoins += 50;
+    } else {
+        gachaResult.textContent = 'ざんねん…';
+    }
+    localStorage.setItem('trainPuzzleCoins', userCoins);
+    updateCoinDisplay();
+}
 
 // --- ユーティリティ関数 ---
 function shuffle(array) {
@@ -263,7 +319,7 @@ function generateDummyChars(answer) {
         const randomChar = hiragana[Math.floor(Math.random() * hiragana.length)];
         if (!answerChars.includes(randomChar)) dummies.push(randomChar);
     }
-    return [...new Set(dummies)]; // 重複しないようにダミー文字を返す
+    return [...new Set(dummies)];
 }
 
 // --- ゲーム開始 ---
