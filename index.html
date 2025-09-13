@@ -5,43 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>鉄道もじパズル</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700&family=Noto+Sans+JP:wght@700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;900&family=Noto+Sans+JP:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
 
     <div id="start-screen">
-        <h1>鉄道もじパズル</h1>
-        <h2>ちいきを えらんでね！</h2>
-        <div id="region-selector">
-            </div>
-    </div>
+        </div>
 
     <div id="game-screen" class="hidden">
         <div class="container">
+            <div id="coin-display-game">コイン: 0</div>
             
             <div id="hint-area" class="hint">
-                <img id="hint-image" src="" alt="電車のヒント画像"> 
-                <p id="hint-text"></p>
-            </div>
+                </div>
     
             <div id="answer-area" class="grid answer-grid"></div>
-            
             <div id="choices-grid" class="grid choices-grid"></div>
     
             <div id="message-area">
                 <p id="message-text"></p>
                 <p id="score-text"></p>
+                <p id="final-coin-text"></p>
             </div>
             
             <div class="button-area">
-                <button id="reset-button" class="hidden">やりなおし</button>
-                <button id="pass-button" class="hidden">パス</button>
-                <button id="next-button" class="hidden">つぎのえきへ</button>
-            </div>
+                </div>
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <div id="event-modal" class="hidden">
+        </div>
 
+    <script src="script.js"></script>
 </body>
 </html>
