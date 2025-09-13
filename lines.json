@@ -6,7 +6,7 @@
   { "answer": "さいきょうせん", "hint": "【JR東】埼玉と東京をむすぶ緑の通勤電車", "image": "saikyo.jpg", "region": "関東" },
   { "answer": "そうぶせん", "hint": "【JR東】千葉と東京をむすぶ黄色の電車", "image": "sobu.jpg", "region": "関東" },
   { "answer": "はんしんジェットカー", "hint": "【阪神】加速がすごい！あおいろの普通電車", "image": "hanshin_jetcar.jpg", "region": "関西" },
-  { "answer": "なんかいラピート", "hint": "【南海】関西空港へいく青くて丸い特geç", "image": "nankai_rapit.jpg", "region": "関西" },
+  { "answer": "なんかいラピート", "hint": "【南海】関西空港へいく青くて丸い特急", "image": "nankai_rapit.jpg", "region": "関西" },
   { "answer": "はやぶさ", "hint": "【新幹線】東京と新函館北斗などを結ぶ", "image": "hayabusa.jpg", "region": "新幹線" },
   { "answer": "ドクターイエロー", "hint": "【新幹線】見ると幸せになれる？黄色い新幹線", "image": "doctor_yellow.jpg", "region": "新幹線" },
   { "answer": "おだきゅうロマンスカー", "hint": "【小田急】はこねへいく展望席がある特急", "image": "odakyu_romancecar.jpg", "region": "関東" },
