@@ -1,13 +1,10 @@
 // --- DOM要素の取得 ---
 const titleScreen = document.getElementById('title-screen');
-const mainMenuScreen = document.getElementById('main-menu-screen');
 const gameScreen = document.getElementById('game-screen');
 const howToPlayModal = document.getElementById('how-to-play-modal');
 const startGameButton = document.getElementById('start-game-button');
 const howToPlayButton = document.getElementById('how-to-play-button');
-const backToTitleButton = document.getElementById('back-to-title-button');
 const modalCloseButtons = document.querySelectorAll('.modal-close-button');
-const regionSelector = document.getElementById('region-selector');
 const hintImage = document.getElementById('hint-image');
 const hintButton = document.getElementById('hint-button');
 const hint1Text = document.getElementById('hint1');
@@ -38,7 +35,7 @@ let isBonusTime = false;
 let currentHintLevel = 0;
 const QUESTIONS_PER_GAME = 20;
 const GACHA_COST = 10;
-const GACHA_SYMBOLS = ['🚃', '🚅', '🚂', '🚃', '🚅', '🚂', '🚆']; // 🚆が当たり
+const GACHA_SYMBOLS = ['🚃', '🚅', '🚂', '🚃', '🚅', '🚂', '🚆'];
 
 // --- 初期化処理 ---
 async function initialize() {
@@ -54,33 +51,22 @@ async function initialize() {
     }
 }
 
-// --- コイン表示を更新する関数 ---
+// --- コイン表示を更新 ---
 function updateCoinDisplay() {
     coinDisplayGame.textContent = `コイン: ${userCoins}`;
     coinDisplayGacha.textContent = `コイン: ${userCoins}`;
 }
 
-// --- 画面表示とゲームフロー ---
-function displayRegionSelector() {
-    const regions = ['全国', ...new Set(allQuestions.map(q => q.region).filter(r => r))];
-    regionSelector.innerHTML = '';
-    regions.forEach(region => {
-        const button = document.createElement('button');
-        button.className = 'region-button';
-        button.textContent = region;
-        button.onclick = () => startGame(region);
-        regionSelector.appendChild(button);
-    });
-}
-
-function startGame(region) {
-    mainMenuScreen.classList.add('hidden');
+// --- 画面フロー ---
+function startGame() {
+    titleScreen.classList.add('hidden');
     gameScreen.classList.remove('hidden');
-    let filteredQuestions = (region === '全国') ? allQuestions : allQuestions.filter(q => q.region === region);
+    
+    let filteredQuestions = allQuestions; // 全ての問題を対象にする
     if (filteredQuestions.length === 0) {
-        alert('この地域の問題がありません。トップにもどります。');
+        alert('問題がありません。トップにもどります。');
         gameScreen.classList.add('hidden');
-        mainMenuScreen.classList.remove('hidden');
+        titleScreen.classList.remove('hidden');
         return;
     }
     const questionCount = Math.min(filteredQuestions.length, QUESTIONS_PER_GAME);
@@ -142,11 +128,11 @@ function showResult() {
     messageText.className = messageClass;
     scoreText.textContent = `${total}問中 ${correctAnswers}問 正解！`;
     finalCoinText.textContent = `のこりコイン: ${userCoins}枚`;
-    nextButton.textContent = 'メニューにもどる';
+    nextButton.textContent = 'タイトルにもどる';
     nextButton.classList.remove('hidden');
     nextButton.onclick = () => {
         gameScreen.classList.add('hidden');
-        mainMenuScreen.classList.remove('hidden');
+        titleScreen.classList.remove('hidden');
     };
 }
 
@@ -156,17 +142,9 @@ function nextQuestion() {
 }
 
 // --- イベントリスナー ---
-startGameButton.addEventListener('click', () => {
-    titleScreen.classList.add('hidden');
-    mainMenuScreen.classList.remove('hidden');
-    displayRegionSelector();
-});
+startGameButton.addEventListener('click', startGame);
 howToPlayButton.addEventListener('click', () => {
     howToPlayModal.classList.remove('hidden');
-});
-backToTitleButton.addEventListener('click', () => {
-    mainMenuScreen.classList.add('hidden');
-    titleScreen.classList.remove('hidden');
 });
 modalCloseButtons.forEach(button => {
     button.addEventListener('click', () => {
@@ -229,13 +207,11 @@ function checkAnswer() {
     const answerCells = document.querySelectorAll('.answer-cell');
     const answer = gameQuestions[currentQuestionIndex].answer;
     let currentAnswer = Array.from(answerCells).map(cell => cell.textContent).join('');
-    
     if (currentAnswer.length !== answer.length) {
         messageText.textContent = '';
         messageText.className = '';
         return;
     }
-
     if (currentAnswer === answer) {
         messageText.textContent = 'せいかい！';
         messageText.className = 'correct';
