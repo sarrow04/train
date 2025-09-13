@@ -62,7 +62,7 @@ function startGame() {
     titleScreen.classList.add('hidden');
     gameScreen.classList.remove('hidden');
     
-    let filteredQuestions = allQuestions; // 全ての問題を対象にする
+    let filteredQuestions = allQuestions;
     if (filteredQuestions.length === 0) {
         alert('問題がありません。トップにもどります。');
         gameScreen.classList.add('hidden');
@@ -76,24 +76,36 @@ function startGame() {
     loadQuestion();
 }
 
+// ▼▼▼ ヒントの表示ロジックを修正 ▼▼▼
 function loadQuestion() {
     clearUIForNewQuestion();
     passButton.classList.remove('hidden');
     resetButton.classList.remove('hidden');
-    currentHintLevel = 0;
-    hintButton.disabled = false;
-    hintButton.textContent = 'ヒントを見る (1コイン)';
-    [hint1Text, hint2Text, hint3Text].forEach(el => {
-        el.classList.add('hidden');
-        el.textContent = '';
-    });
+    
     if (currentQuestionIndex >= gameQuestions.length) {
         showResult();
         return;
     }
+
     nextButton.textContent = 'つぎのえきへ';
     nextButton.onclick = nextQuestion;
     const question = gameQuestions[currentQuestionIndex];
+    
+    // ヒント機能の初期化
+    currentHintLevel = 1; // ★レベル1のヒントは最初から表示するので1に設定
+    hintButton.disabled = false;
+    hintButton.textContent = '次のヒント (1コイン)';
+    
+    // ★ヒント1（無料ヒント）を自動で表示
+    hint1Text.textContent = `ヒント1: ${question.hint}`;
+    hint1Text.classList.remove('hidden');
+
+    // ヒント2と3は隠す
+    hint2Text.classList.add('hidden');
+    hint2Text.textContent = '';
+    hint3Text.classList.add('hidden');
+    hint3Text.textContent = '';
+
     displayHintImage(question);
     createAnswerGrid(question.answer.length);
     createChoicesGrid(question.answer);
@@ -207,11 +219,13 @@ function checkAnswer() {
     const answerCells = document.querySelectorAll('.answer-cell');
     const answer = gameQuestions[currentQuestionIndex].answer;
     let currentAnswer = Array.from(answerCells).map(cell => cell.textContent).join('');
+    
     if (currentAnswer.length !== answer.length) {
         messageText.textContent = '';
         messageText.className = '';
         return;
     }
+
     if (currentAnswer === answer) {
         messageText.textContent = 'せいかい！';
         messageText.className = 'correct';
@@ -239,13 +253,13 @@ function showEventModal() {
     eventModal.classList.remove('hidden');
 }
 
+// ▼▼▼ ヒントの表示ロジックを修正 ▼▼▼
 function showHint() {
     if (currentHintLevel >= 3 || messageText.textContent === 'せいかい！') return;
     if (userCoins < 1) {
         hintButton.textContent = 'コインがたりません';
         setTimeout(() => {
-            if (currentHintLevel === 0) hintButton.textContent = 'ヒントを見る (1コイン)';
-            else if (currentHintLevel === 1) hintButton.textContent = '次のヒント (1コイン)';
+            if (currentHintLevel === 1) hintButton.textContent = '次のヒント (1コイン)';
             else if (currentHintLevel === 2) hintButton.textContent = '最後のヒント (1コイン)';
         }, 1500);
         return;
@@ -255,15 +269,12 @@ function showHint() {
     updateCoinDisplay();
     currentHintLevel++;
     const question = gameQuestions[currentQuestionIndex];
-    if (currentHintLevel === 1) {
-        hint1Text.textContent = `ヒント1: ${question.hint}`;
-        hint1Text.classList.remove('hidden');
-        hintButton.textContent = '次のヒント (1コイン)';
-    } else if (currentHintLevel === 2) {
+    
+    if (currentHintLevel === 2) { // ★ボタンを1回押すとレベル2のヒント
         hint2Text.textContent = `ヒント2: ${question.hint2}`;
         hint2Text.classList.remove('hidden');
         hintButton.textContent = '最後のヒント (1コイン)';
-    } else if (currentHintLevel === 3) {
+    } else if (currentHintLevel === 3) { // ★ボタンを2回押すとレベル3のヒント
         hint3Text.textContent = `ヒント3: ${question.hint3}`;
         hint3Text.classList.remove('hidden');
         hintButton.disabled = true;
