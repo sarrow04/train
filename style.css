@@ -91,8 +91,9 @@ body {
     align-items: center;
     font-size: 1.8rem;
     border-radius: 8px;
-    cursor: grab;
     font-weight: bold;
+    cursor: pointer; /* マウスカーソルを指マークに変更 */
+    transition: transform 0.1s, box-shadow 0.2s;
 }
 .choice-cell {
     background-color: #e0f7fa;
@@ -100,9 +101,11 @@ body {
     color: #00796b;
 }
 .answer-cell { background-color: #eceff1; }
-.dragging {
-    opacity: 0.4;
-    transform: scale(1.1);
+/* ▼▼▼ この部分を追加 ▼▼▼ */
+.cell.selected {
+    border-color: #ff4500;
+    box-shadow: 0 0 10px #ff4500;
+    transform: scale(1.05);
 }
 #message-area { height: 90px; }
 #message-text {
