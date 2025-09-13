@@ -161,4 +161,110 @@ function createChoicesGrid(answer) {
     // 2. 12マスに足りない分だけダミー文字を追加する
     for(let i = 0; i < dummyChars.length; i++) {
         if (choiceChars.length < 12) {
-            choiceChars.push(dummyChars
+            choiceChars.push(dummyChars[i]);
+        } else {
+            break;
+        }
+    }
+
+    const shuffledChars = shuffle(choiceChars); // 3. 最後にシャッフルする
+
+    shuffledChars.forEach(char => {
+        const cell = document.createElement('div');
+        cell.classList.add('cell', 'choice-cell');
+        cell.textContent = char;
+        choicesGrid.appendChild(cell);
+    });
+}
+
+// --- ゲームロジック ---
+function checkAnswer() {
+    const answerCells = document.querySelectorAll('.answer-cell');
+    const answer = gameQuestions[currentQuestionIndex].answer;
+    let currentAnswer = Array.from(answerCells).map(cell => cell.textContent).join('');
+    if (currentAnswer.length !== answer.length) {
+        // 答えが入力途中なら、メッセージをクリア
+        messageText.textContent = '';
+        messageText.className = '';
+        return;
+    }
+    if (currentAnswer === answer) {
+        messageText.textContent = 'せいかい！';
+        messageText.className = 'correct';
+        correctAnswers++;
+        nextButton.classList.remove('hidden');
+        passButton.classList.add('hidden');
+        resetButton.classList.add('hidden');
+    } else {
+        messageText.textContent = 'ちがうみたい…';
+        messageText.className = '';
+    }
+}
+
+// ▼▼▼ 新操作方法：タップしたときの動きを全面的に変更 ▼▼▼
+function addEventListeners() {
+    // 選択肢マス（下）と回答マス（上）に別々のイベントを設定
+    choicesGrid.addEventListener('click', onChoiceCellClick);
+    answerArea.addEventListener('click', onAnswerCellClick);
+}
+
+// 下の選択肢マスがタップされたときの処理
+function onChoiceCellClick(event) {
+    const clickedCell = event.target;
+    // .choice-cellクラスではない、または文字がない場合は何もしない
+    if (!clickedCell.classList.contains('choice-cell') || !clickedCell.textContent || messageText.textContent === 'せいかい！') {
+        return;
+    }
+
+    // 上の回答マスの中から、最初の空きマスを探す
+    const emptyAnswerCell = document.querySelector('.answer-cell:empty');
+    if (emptyAnswerCell) {
+        // 空きマスに文字を移動
+        emptyAnswerCell.textContent = clickedCell.textContent;
+        clickedCell.textContent = '';
+        checkAnswer(); // 答えが揃ったかチェック
+    }
+}
+
+// 上の回答マスがタップされたときの処理
+function onAnswerCellClick(event) {
+    const clickedCell = event.target;
+    // .answer-cellクラスではない、または文字がない場合は何もしない
+    if (!clickedCell.classList.contains('answer-cell') || !clickedCell.textContent || messageText.textContent === 'せいかい！') {
+        return;
+    }
+
+    // 下の選択肢マスの中から、最初の空きマスを探す
+    const emptyChoiceCell = document.querySelector('.choice-cell:empty');
+    if (emptyChoiceCell) {
+        // 空きマスに文字を戻す
+        emptyChoiceCell.textContent = clickedCell.textContent;
+        clickedCell.textContent = '';
+        checkAnswer(); // 答えの状態を更新
+    }
+}
+
+
+// --- ユーティリティ関数 ---
+function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+function generateDummyChars(answer) {
+    const hiragana = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽ";
+    const answerChars = [...answer];
+    let dummies = [];
+    const dummyCount = 12 - answerChars.length;
+    while (dummies.length < dummyCount) {
+        const randomChar = hiragana[Math.floor(Math.random() * hiragana.length)];
+        if (!answerChars.includes(randomChar)) dummies.push(randomChar);
+    }
+    return [...new Set(dummies)]; // 重複しないようにダミー文字を返す
+}
+
+// --- ゲーム開始 ---
+initialize();
