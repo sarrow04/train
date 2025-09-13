@@ -10,7 +10,22 @@
 <body>
 
     <div id="start-screen">
+        <h1>鉄道もじパズル</h1>
+        <h2>ちいきを えらんでね！</h2>
+        <div id="region-selector"></div>
+
+        <div id="gacha-section">
+            <h2>電車スロット</h2>
+            <div id="coin-display-gacha">コイン: 0</div>
+            <div id="slot-machine">
+                <div class="reel">?</div>
+                <div class="reel">?</div>
+                <div class="reel">?</div>
+            </div>
+            <button id="play-gacha-button">10コインでまわす</button>
+            <p id="gacha-result"></p>
         </div>
+    </div>
 
     <div id="game-screen" class="hidden">
         <div class="container">
@@ -25,6 +40,7 @@
                 </div>
                 <button id="hint-button">ヒントを見る (1コイン)</button>
             </div>
+    
             <div id="answer-area" class="grid answer-grid"></div>
             <div id="choices-grid" class="grid choices-grid"></div>
     
@@ -43,7 +59,12 @@
     </div>
 
     <div id="event-modal" class="hidden">
+        <div class="modal-content">
+            <h2>ボーナスタイム！</h2>
+            <p>5問連続正解おめでとう！<br>次の問題はコイン2倍！</p>
+            <button id="close-modal-button">OK</button>
         </div>
+    </div>
 
     <script src="script.js"></script>
 </body>
