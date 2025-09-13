@@ -17,7 +17,7 @@ let allQuestions = [];
 let gameQuestions = [];
 let currentQuestionIndex = 0;
 let correctAnswers = 0;
-let selectedCell = null; // ★ドラッグ操作の代わりに、選択したセルを記憶する変数
+let selectedCell = null;
 const QUESTIONS_PER_GAME = 20;
 
 // --- 初期化処理 ---
@@ -77,7 +77,7 @@ function loadQuestion() {
     displayHint(question);
     createAnswerGrid(question.answer.length);
     createChoicesGrid(question.answer);
-    addClickListeners(); // ★ドラッグ＆ドロップの代わりにクリックリスナーをセット
+    addEventListeners(); // ▼▼▼ スマホ対応のための変更点1 ▼▼▼
 }
 
 function showResult() {
@@ -187,42 +187,39 @@ function checkAnswer() {
     }
 }
 
-// ▼▼▼ この関数をまるごと書き換え ▼▼▼
-function addClickListeners() {
+// ▼▼▼ スマホ対応のための変更点2 ▼▼▼
+// addClickListenersからaddEventListenersに名前を変更
+function addEventListeners() {
     const cells = document.querySelectorAll('.cell');
     cells.forEach(cell => {
-        cell.addEventListener('click', onCellClick);
+        // 'click'から'touchstart'に変更。スマホでの反応が良くなる
+        cell.addEventListener('touchstart', onCellClick);
     });
 }
 
 function onCellClick(event) {
-    const clickedCell = event.currentTarget;
+    // スマホでの不要な動作（スクロールなど）を防ぐおまじない
+    event.preventDefault();
     
-    // すでに正解している場合は何もしない
+    const clickedCell = event.currentTarget;
     if (messageText.textContent === 'せいかい！') return;
 
-    // 1. 選択中のセルがある場合
     if (selectedCell) {
-        // 1a. クリックしたのが空のセルなら、文字を移動
         if (!clickedCell.textContent) {
             clickedCell.textContent = selectedCell.textContent;
             selectedCell.textContent = '';
             selectedCell.classList.remove('selected');
             selectedCell = null;
             checkAnswer();
-        // 1b. クリックしたのが選択中のセル自身なら、選択を解除
         } else if (clickedCell === selectedCell) {
             selectedCell.classList.remove('selected');
             selectedCell = null;
-        // 1c. クリックしたのが別の文字入りセルなら、選択を切り替え
         } else {
             selectedCell.classList.remove('selected');
             selectedCell = clickedCell;
             selectedCell.classList.add('selected');
         }
-    // 2. 選択中のセルがない場合
     } else {
-        // 2a. クリックしたセルに文字があれば、それを選択
         if (clickedCell.textContent) {
             selectedCell = clickedCell;
             selectedCell.classList.add('selected');
