@@ -17,7 +17,7 @@ let allQuestions = [];
 let gameQuestions = [];
 let currentQuestionIndex = 0;
 let correctAnswers = 0;
-let selectedCell = null;
+// selectedCell変数は不要になったので削除
 const QUESTIONS_PER_GAME = 20;
 
 // --- 初期化処理 ---
@@ -77,7 +77,7 @@ function loadQuestion() {
     displayHint(question);
     createAnswerGrid(question.answer.length);
     createChoicesGrid(question.answer);
-    addEventListeners(); // ▼▼▼ スマホ対応のための変更点1 ▼▼▼
+    addEventListeners();
 }
 
 function showResult() {
@@ -132,10 +132,6 @@ function clearUIForNewQuestion() {
     answerArea.innerHTML = '';
     choicesGrid.innerHTML = '';
     choicesGrid.style.display = 'grid';
-    if (selectedCell) {
-        selectedCell.classList.remove('selected');
-        selectedCell = null;
-    }
 }
 
 function displayHint(question) {
@@ -157,96 +153,12 @@ function createAnswerGrid(length) {
     }
 }
 
+// ▼▼▼ バグ修正：正解の文字が必ず含まれるようにロジックを修正 ▼▼▼
 function createChoicesGrid(answer) {
+    let choiceChars = [...answer]; // 1. まず正解の文字をすべて入れる
     const dummyChars = generateDummyChars(answer);
-    const choiceChars = shuffle([...answer, ...dummyChars]).slice(0, 12);
-    choiceChars.forEach(char => {
-        const cell = document.createElement('div');
-        cell.classList.add('cell', 'choice-cell');
-        cell.textContent = char;
-        choicesGrid.appendChild(cell);
-    });
-}
-
-// --- ゲームロジック ---
-function checkAnswer() {
-    const answerCells = document.querySelectorAll('.answer-cell');
-    const answer = gameQuestions[currentQuestionIndex].answer;
-    let currentAnswer = Array.from(answerCells).map(cell => cell.textContent).join('');
-    if (currentAnswer.length !== answer.length) return;
-    if (currentAnswer === answer) {
-        messageText.textContent = 'せいかい！';
-        messageText.className = 'correct';
-        correctAnswers++;
-        nextButton.classList.remove('hidden');
-        passButton.classList.add('hidden');
-        resetButton.classList.add('hidden');
-    } else {
-        messageText.textContent = 'ちがうみたい…';
-        messageText.className = '';
-    }
-}
-
-// ▼▼▼ スマホ対応のための変更点2 ▼▼▼
-// addClickListenersからaddEventListenersに名前を変更
-function addEventListeners() {
-    const cells = document.querySelectorAll('.cell');
-    cells.forEach(cell => {
-        // 'click'から'touchstart'に変更。スマホでの反応が良くなる
-        cell.addEventListener('touchstart', onCellClick);
-    });
-}
-
-function onCellClick(event) {
-    // スマホでの不要な動作（スクロールなど）を防ぐおまじない
-    event.preventDefault();
     
-    const clickedCell = event.currentTarget;
-    if (messageText.textContent === 'せいかい！') return;
-
-    if (selectedCell) {
-        if (!clickedCell.textContent) {
-            clickedCell.textContent = selectedCell.textContent;
-            selectedCell.textContent = '';
-            selectedCell.classList.remove('selected');
-            selectedCell = null;
-            checkAnswer();
-        } else if (clickedCell === selectedCell) {
-            selectedCell.classList.remove('selected');
-            selectedCell = null;
-        } else {
-            selectedCell.classList.remove('selected');
-            selectedCell = clickedCell;
-            selectedCell.classList.add('selected');
-        }
-    } else {
-        if (clickedCell.textContent) {
-            selectedCell = clickedCell;
-            selectedCell.classList.add('selected');
-        }
-    }
-}
-
-// --- ユーティリティ関数 ---
-function shuffle(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-}
-
-function generateDummyChars(answer) {
-    const hiragana = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽ";
-    const answerChars = [...answer];
-    let dummies = [];
-    const dummyCount = Math.max(3, 12 - answerChars.length);
-    while (dummies.length < dummyCount) {
-        const randomChar = hiragana[Math.floor(Math.random() * hiragana.length)];
-        if (!answerChars.includes(randomChar) && !dummies.includes(randomChar)) dummies.push(randomChar);
-    }
-    return dummies;
-}
-
-// --- ゲーム開始 ---
-initialize();
+    // 2. 12マスに足りない分だけダミー文字を追加する
+    for(let i = 0; i < dummyChars.length; i++) {
+        if (choiceChars.length < 12) {
+            choiceChars.push(dummyChars
