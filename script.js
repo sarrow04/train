@@ -183,7 +183,7 @@ function clearUIForNewQuestion() {
 function displayHintImage(question) {
     if (question.image && question.image.trim() !== '') {
         // (変更後)
-hintImage.src = `images/${question.image}`;
+hintImage.src = `../mages/${question.image}`;
         hintImage.style.display = 'block';
     } else {
         hintImage.style.display = 'none';
