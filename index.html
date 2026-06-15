@@ -1,83 +1,487 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>鉄道もじパズル</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;900&family=Noto+Sans+JP:wght@700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>店舗ボトルネック診断シミュレーター</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Space+Grotesk:wght@400;600;700&display=swap');
+    :root {
+      --bg: #0f1117;
+      --surface: #181c27;
+      --surface2: #1e2333;
+      --border: #2a3050;
+      
+      /* 視認性を向上させたアクセントカラー（高コントラスト） */
+      --accent: #5effb8;       /* 良好：鮮やかなミントグリーン */
+      --accent2: #ff7b7b;      /* 要改善：明るいコーラルレッド */
+      --accent3: #ffd97d;      /* 注意：視認性の高いパステルイエロー */
+      
+      --text: #e8ecf4;
+      --muted: #94a1c1;        /* テキストの沈み込みを防ぐため少し明るく修正 */
+      --font-data: 'Space Grotesk', sans-serif;
+      --font-body: 'Noto Sans JP', sans-serif;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:var(--font-body);min-height:100vh;padding-bottom:80px;}
+
+    header{border-bottom:1px solid var(--border);padding:18px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:100;}
+    .logo-wrap{display:flex;align-items:baseline;gap:14px;}
+    .logo{font-family:var(--font-data);font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;}
+    header h1{font-family:var(--font-data);font-size:16px;font-weight:700;}
+    nav{display:flex;gap:4px;}
+    nav button{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:var(--font-body);font-size:13px;padding:6px 14px;cursor:pointer;transition:all .15s;}
+    nav button.active,nav button:hover{border-color:var(--accent);color:var(--accent);}
+
+    .tab-content{display:none;}
+    .tab-content.active{display:block;}
+
+    .container{max-width:1040px;margin:0 auto;padding:36px 24px;}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+    @media(max-width:740px){.grid-2{grid-template-columns:1fr;}header{flex-direction:column;gap:12px;align-items:flex-start;}}
+
+    .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;}
+    .panel-title{font-family:var(--font-data);font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:20px;}
+    .full-width{grid-column:1/-1;}
+
+    .field{margin-bottom:16px;}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px;}
+    input[type=number],input[type=month]{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--font-data);font-size:16px;font-weight:600;outline:none;transition:border-color .2s;}
+    input:focus{border-color:var(--accent);}
+    input::placeholder{color:var(--border);font-weight:400;}
+    .unit{font-size:11px;color:var(--muted);margin-top:4px;}
+    .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+    .calc-btn{width:100%;margin-top:8px;background:var(--accent);color:#0f1117;border:none;border-radius:8px;padding:14px;font-family:var(--font-data);font-size:15px;font-weight:700;cursor:pointer;transition:opacity .2s;}
+    .calc-btn:hover{opacity:.85;}
+    .sec-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-data);font-size:13px;font-weight:600;padding:10px 18px;cursor:pointer;transition:border-color .2s;}
+    .sec-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+    .result-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
+    .metric{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;}
+    .metric-label{font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:.06em;}
+    .metric-value{font-family:var(--font-data);font-size:22px;font-weight:700;}
+    
+    /* 文字色のコントラストと太さを強化 */
+    .metric-value.good{color:var(--accent);text-shadow: 0 0 1px rgba(94,255,184,0.2);}
+    .metric-value.warn{color:var(--accent3);text-shadow: 0 0 1px rgba(255,217,125,0.2);}
+    .metric-value.bad{color:var(--accent2);text-shadow: 0 0 1px rgba(255,123,123,0.2);}
+    .metric-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+
+    .bottleneck-list{list-style:none;}
+    .bottleneck-item{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);}
+    .bottleneck-item:last-child{border-bottom:none;}
+    .bn-tag{flex-shrink:0;font-family:var(--font-data);font-size:10px;font-weight:700;letter-spacing:.1em;padding:4px 10px;border-radius:4px;text-transform:uppercase;margin-top:2px;}
+    
+    /* タグ内の文字の認識率を高めるため、背景を少し濃くして文字色をはっきりと */
+    .bn-tag.high{background:rgba(255,123,123,0.22);color:var(--accent2);}
+    .bn-tag.mid{background:rgba(255,217,125,0.22);color:var(--accent3);}
+    .bn-tag.low{background:rgba(94,255,184,0.22);color:var(--accent);}
+    .bn-text{font-size:14px;line-height:1.6;font-weight:500;}
+    .bn-sub{font-size:12px;color:var(--muted);margin-top:2px;}
+
+    .copy-bar{display:flex;justify-content:flex-end;margin-bottom:12px;}
+
+    .month-entry{display:grid;grid-template-columns:160px 1fr 1fr 1fr 36px;gap:10px;align-items:end;margin-bottom:10px;}
+    @media(max-width:600px){.month-entry{grid-template-columns:1fr 1fr;}}
+    .del-btn{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:16px;width:36px;height:42px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+    .del-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+    .chart-wrap{position:relative;height:320px;margin-top:24px;}
+
+    .empty-state{text-align:center;color:var(--muted);font-size:14px;padding:40px 0;}
+    .empty-state .big{font-family:var(--font-data);font-size:40px;margin-bottom:8px;}
+
+    /* manual */
+    .manual {max-width:720px;}
+    .manual h2{font-family:var(--font-data);font-size:18px;font-weight:700;margin:36px 0 12px;border-bottom:1px solid var(--border);padding-bottom:8px;}
+    .manual h2:first-child{margin-top:0;}
+    .manual h3{font-size:13px;font-weight:700;color:var(--accent);margin:20px 0 8px;font-family:var(--font-data);letter-spacing:.06em;text-transform:uppercase;}
+    .manual p{font-size:14px;line-height:1.9;margin-bottom:12px;}
+    .manual ul,.manual ol{padding-left:20px;margin-bottom:12px;}
+    .manual li{font-size:14px;line-height:1.9;}
+    .manual table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px;}
+    .manual th{background:var(--surface2);border:1px solid var(--border);padding:10px 12px;text-align:left;font-family:var(--font-data);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
+    .manual td{border:1px solid var(--border);padding:10px 12px;line-height:1.6;vertical-align:top;}
+    .formula{background:var(--surface2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;font-family:var(--font-data);font-size:14px;margin:12px 0;color:var(--accent);font-weight:600;}
+    .badge-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+    .badge{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:6px 12px;border-radius:6px;font-weight:500;}
+    .badge.good{background:rgba(94,255,184,0.15);color:var(--accent);}
+    .badge.warn{background:rgba(255,217,125,0.15);color:var(--accent3);}
+    .badge.bad{background:rgba(255,123,123,0.15);color:var(--accent2);}
+    .tip{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-size:13px;line-height:1.8;margin-bottom:12px;color:var(--muted);}
+    .tip strong{color:var(--text);}
+  </style>
 </head>
 <body>
 
-    <div id="title-screen">
-        <h1 class="main-title">てつどう もじパズル</h1>
-        <div class="title-buttons">
-            <button id="start-game-button" class="title-button">▶ ゲームスタート</button>
-            <button id="how-to-play-button" class="title-button">❓ あそびかた</button>
-        </div>
+<header>
+  <div class="logo-wrap">
+    <span class="logo">Bottleneck</span>
+    <h1>店舗ボトルネック診断シミュレーター</h1>
+  </div>
+  <nav>
+    <button class="active" onclick="showTab('diagnose',this)">診断</button>
+    <button onclick="showTab('graph',this)">月次グラフ</button>
+    <button onclick="showTab('manual',this)">使い方</button>
+  </nav>
+</header>
 
-        <div id="gacha-section">
-            <h2>電車スロット</h2>
-            <div id="coin-display-gacha">コイン: 0</div>
-            <div id="slot-machine">
-                <div class="reel">?</div>
-                <div class="reel">?</div>
-                <div class="reel">?</div>
-            </div>
-            <button id="play-gacha-button">10コインでまわす</button>
-            <p id="gacha-result"></p>
-        </div>
-    </div>
+<div id="tab-diagnose" class="tab-content active">
+<div class="container"><div class="grid-2">
 
-    <div id="game-screen" class="hidden">
-        <div class="container">
-            <div id="coin-display-game">コイン: 0</div>
-            <div id="hint-area">
-                <img id="hint-image" src="" alt="電車のヒント画像">
-                <div id="hints-container">
-                    <p id="hint1" class="hint-text hidden"></p>
-                    <p id="hint2" class="hint-text hidden"></p>
-                    <p id="hint3" class="hint-text hidden"></p>
-                </div>
-                <button id="hint-button">ヒントを見る (1コイン)</button>
-            </div>
-            <div id="answer-area" class="grid answer-grid"></div>
-            <div id="choices-grid" class="grid choices-grid"></div>
-            <div id="message-area">
-                <p id="message-text"></p>
-                <p id="score-text"></p>
-                <p id="final-coin-text"></p>
-            </div>
-            <div class="button-area">
-                <button id="reset-button" class="hidden">やりなおし</button>
-                <button id="pass-button" class="hidden">パス</button>
-                <button id="next-button" class="hidden">つぎのえきへ</button>
-            </div>
-        </div>
+  <div class="panel">
+    <p class="panel-title">データ入力</p>
+    <div class="field">
+      <label>対象月（月次グラフに自動反映されます）</label>
+      <input type="month" id="targetMonth" />
     </div>
+    <div class="field-row">
+      <div class="field"><label>月間売上</label><input type="number" id="revenue" placeholder="1000000" /><p class="unit">円 / 月</p></div>
+      <div class="field"><label>月間客数</label><input type="number" id="customers" placeholder="300" /><p class="unit">人 / 月</p></div>
+    </div>
+    <div class="field"><label>客単価（売上÷客数 で自動計算）</label><input type="number" id="unitPrice" placeholder="3300" /><p class="unit">円</p></div>
+    <div class="field-row">
+      <div class="field"><label>1日の営業時間</label><input type="number" id="hours" placeholder="10" /><p class="unit">時間</p></div>
+      <div class="field"><label>月間営業日数</label><input type="number" id="days" placeholder="25" /><p class="unit">日</p></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>アルバイト（同時稼働平均）</label><input type="number" id="staff" placeholder="3" /><p class="unit">人</p></div>
+      <div class="field"><label>平均時給</label><input type="number" id="wage" placeholder="1100" /><p class="unit">円</p></div>
+    </div>
+    <div class="field"><label>月間固定費</label><input type="number" id="fixed" placeholder="300000" /><p class="unit">円（家賃・光熱費など）</p></div>
+    <div class="field"><label>原価率</label><input type="number" id="costRate" placeholder="30" /><p class="unit">%（飲食 30〜35%、小売 50〜60% が目安）</p></div>
+    <button class="calc-btn" onclick="calculate()">ボトルネックを診断する</button>
+  </div>
 
-    <div id="event-modal" class="modal-background hidden">
-        <div class="modal-content">
-            <h2>🌟ボーナスタイム！🌟</h2>
-            <p>5問連続正解おめでとう！<br>次の問題はコイン2倍！</p>
-            <button class="modal-close-button">OK</button>
-        </div>
+  <div class="panel">
+    <p class="panel-title">診断結果</p>
+    <div class="copy-bar"><button class="sec-btn" onclick="copyResult()" id="copy-btn" style="display:none">📋 結果をコピー</button></div>
+    <div id="result-content">
+      <div class="empty-state"><div class="big">📊</div>左のデータを入力して<br>診断してください</div>
     </div>
-    <div id="how-to-play-modal" class="modal-background hidden">
-        <div class="modal-content">
-            <h2>あそびかた</h2>
-            <p class="how-to-play-text">
-                ① したの もじを タップして<br>
-                うえの こたえに いれてね！<br>
-                ② もじを もどす ときは、<br>
-                うえの もじを タップしてね！<br>
-                ③ コインを つかって スロットや<br>
-                ヒントも つかえるよ！
-            </p>
-            <button class="modal-close-button">とじる</button>
-        </div>
-    </div>
+  </div>
 
-    <script src="script.js"></script>
+  <div class="panel full-width" id="bottleneck-panel" style="display:none">
+    <p class="panel-title">ボトルネック分析</p>
+    <ul class="bottleneck-list" id="bottleneck-list"></ul>
+  </div>
+
+</div></div>
+</div>
+
+<div id="tab-graph" class="tab-content">
+<div class="container"><div class="grid-2">
+
+  <div class="panel full-width">
+    <p class="panel-title">月次データ入力</p>
+    <div id="month-entries"></div>
+    <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;">
+      <button class="sec-btn" onclick="addMonth()">＋ 月を追加</button>
+      <button class="calc-btn" style="max-width:180px" onclick="drawChart()">グラフを更新</button>
+    </div>
+  </div>
+
+  <div class="panel full-width" id="chart-panel" style="display:none">
+    <p class="panel-title">売上・利益 推移</p>
+    <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+  </div>
+
+</div></div>
+</div>
+
+<div id="tab-manual" class="tab-content">
+<div class="container"><div class="manual">
+
+  <h2>このツールについて</h2>
+  <p>店舗の基本データを入力するだけで、<strong>FL比率・損益分岐点・人時売上高・客単価</strong>などの経営指標を自動計算し、どこにボトルネックがあるかを即座に診断します。専門知識がなくても「数字で課題を見つける」習慣をサポートします。</p>
+
+  <h2>入力項目の説明</h2>
+  <table>
+    <tr><th>項目</th><th>説明</th><th>入力例</th></tr>
+    <tr><td>対象月</td><td>診断を行う年月。入力すると月次グラフのデータに自動同期されます</td><td>2026-06</td></tr>
+    <tr><td>月間売上</td><td>その月の総売上（税抜き推奨）</td><td>1,000,000 円</td></tr>
+    <tr><td>月間客数</td><td>月間の延べ来店人数</td><td>300 人</td></tr>
+    <tr><td>客単価</td><td>1人あたりの平均購入額。売上と客数を両方入れると自動計算されます</td><td>3,300 円</td></tr>
+    <tr><td>1日の営業時間</td><td>開店〜閉店までの時間数</td><td>10 時間</td></tr>
+    <tr><td>月間営業日数</td><td>実際に営業した日数</td><td>25 日</td></tr>
+    <tr><td>アルバイト人数</td><td>同時に稼働している平均人数（社員は別途換算）</td><td>3 人</td></tr>
+    <tr><td>平均時給</td><td>スタッフ全員の平均時給</td><td>1,100 円</td></tr>
+    <tr><td>月間固定費</td><td>家賃・光熱費・リース料など変動しない費用の合計</td><td>300,000 円</td></tr>
+    <tr><td>原価率</td><td>売上に対する原材料費の割合</td><td>30 %</td></tr>
+  </table>
+
+  <h2>計算される指標</h2>
+
+  <h3>FL比率</h3>
+  <div class="formula">FL比率 = (人件費 + 原価) ÷ 売上 × 100</div>
+  <div class="badge-row">
+    <span class="badge good">🟢 55%以下：優良</span>
+    <span class="badge warn">🟡 55〜65%：標準（要ウォッチ）</span>
+    <span class="badge bad">🔴 65%超：危険ゾーン</span>
+  </div>
+  <p>飲食店の健全経営の目安は <strong>60%以下</strong> と言われています。</p>
+
+  <h3>損益分岐点売上</h3>
+  <div class="formula">損益分岐点 = 固定費 ÷ (1 − 変動費率)</div>
+  <p>この金額を下回ると赤字になります。月の売上目標設定の基準として使ってください。</p>
+
+  <h3>人時売上高</h3>
+  <div class="formula">人時売上高 = 売上 ÷ (スタッフ人数 × 総労働時間)</div>
+  <div class="badge-row">
+    <span class="badge good">🟢 5,000円以上：良好</span>
+    <span class="badge warn">🟡 3,000〜5,000円：改善余地あり</span>
+    <span class="badge bad">🔴 3,000円未満：配置見直しが必要</span>
+  </div>
+
+  <h3>客単価</h3>
+  <div class="formula">客単価 = 売上 ÷ 客数</div>
+  <p>客単価が低い場合は、アップセル（追加注文の促進）やセット商品の導入が有効です。</p>
+
+  <h2>ボトルネック判定の見方</h2>
+  <div class="badge-row">
+    <span class="badge bad">🔴 要改善</span>
+    <span class="badge warn">🟡 注意</span>
+    <span class="badge good">🟢 良好</span>
+  </div>
+  <p><strong>要改善</strong> の項目から優先的に対処してください。すべて良好になることを目指しましょう。</p>
+
+  <h2>よくある改善パターン</h2>
+
+  <h3>FL比率が高い場合</h3>
+  <div class="tip">
+    <strong>人件費が高い</strong> → シフトの最適化、ピーク外の人員削減<br>
+    <strong>原価率が高い</strong> → 仕入れ見直し、廃棄ロスの削減、メニューの価格改定
+  </div>
+
+  <h3>損益分岐点を超えられない場合</h3>
+  <div class="tip">
+    <strong>客単価を上げる</strong> → メニュー構成・アップセル施策<br>
+    <strong>固定費を下げる</strong> → 家賃交渉、不要なリースの見直し<br>
+    <strong>客数を増やす</strong> → リピート施策、SNS活用
+  </div>
+
+  <h3>人時売上高が低い場合</h3>
+  <div class="tip">
+    <strong>ピーク時間帯を特定する</strong> → 混む時間帯だけ増員、閑散時は削減<br>
+    <strong>作業の効率化</strong> → 仕込みのタイミング見直し、マルチタスク化
+  </div>
+
+  <h2>月次グラフの使い方</h2>
+  <ol>
+    <li>「診断」タブで「対象月」を指定して診断すると、自動的に「月次グラフ」にデータが蓄積されます。</li>
+    <li>手動で微調整や別月のデータを加えたい場合は、「月次グラフ」タブから直接「＋ 月を追加」を行ってください。</li>
+    <li>「グラフを更新」ボタンを押すことで、売上と営業利益の推移が可視化されます。</li>
+  </ol>
+  <p>複数月のデータを入れることで、改善施策の効果を視覚的に確認できます。</p>
+
+</div></div>
+</div>
+
+<script>
+// 初期状態で現在の年月を設定
+const now = new Date();
+const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+document.getElementById('targetMonth').value = currentYm;
+
+function showTab(id,btn){
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function fmt(n){return Math.round(n).toLocaleString('ja-JP');}
+function val(id){return parseFloat(document.getElementById(id).value)||0;}
+
+function calculate(){
+  const revenue=val('revenue'),customers=val('customers'),hours=val('hours'),
+        days=val('days'),staff=val('staff'),wage=val('wage'),
+        fixed=val('fixed'),costRate=val('costRate'),
+        targetMonth=document.getElementById('targetMonth').value;
+
+  if(!revenue||!hours||!days){alert('売上・営業時間・営業日数は必須です');return;}
+
+  let unitPrice=val('unitPrice');
+  if(!unitPrice&&customers>0){
+    unitPrice=revenue/customers;
+    document.getElementById('unitPrice').value=Math.round(unitPrice);
+  }
+
+  const totalHours=hours*days;
+  const laborCost=staff*wage*totalHours;
+  const cogs=revenue*(costRate/100);
+  const fl=laborCost+cogs;
+  const flRatio=(fl/revenue)*100;
+  const varRate=(costRate/100)+(laborCost/revenue);
+  const breakEven=varRate<1?fixed/(1-varRate):Infinity;
+  const profit=revenue-fl-fixed;
+  const laborPerHour=staff>0?revenue/(staff*totalHours):0;
+  const dailySales=days>0?revenue/days:0;
+  const marginRate=(profit/revenue)*100;
+
+  const flClass=flRatio<55?'good':flRatio<65?'warn':'bad';
+  const profitClass=profit>0?'good':'bad';
+
+  document.getElementById('result-content').innerHTML=`
+    <div class="result-grid">
+      <div class="metric"><p class="metric-label">FL比率</p><p class="metric-value ${flClass}">${flRatio.toFixed(1)}%</p><p class="metric-sub">目安: 55〜65%</p></div>
+      <div class="metric"><p class="metric-label">営業利益</p><p class="metric-value ${profitClass}">${fmt(profit)}円</p><p class="metric-sub">利益率 ${marginRate.toFixed(1)}%</p></div>
+      <div class="metric"><p class="metric-label">損益分岐点</p><p class="metric-value">${breakEven===Infinity?'—':fmt(breakEven)+'円'}</p><p class="metric-sub">最低必要売上</p></div>
+      <div class="metric"><p class="metric-label">人時売上高</p><p class="metric-value">${staff>0?fmt(laborPerHour)+'円':'—'}</p><p class="metric-sub">1人1時間あたり</p></div>
+      <div class="metric"><p class="metric-label">客単価</p><p class="metric-value">${unitPrice>0?fmt(unitPrice)+'円':'—'}</p><p class="metric-sub">${customers>0?'月'+fmt(customers)+'人来店':'客数を入力してください'}</p></div>
+      <div class="metric"><p class="metric-label">日次売上</p><p class="metric-value">${fmt(dailySales)}円</p><p class="metric-sub">1日平均</p></div>
+    </div>`;
+
+  const issues=[];
+  if(flRatio>65) issues.push({l:'high',t:'FL比率が高すぎます',s:`現在 ${flRatio.toFixed(1)}% — 65%以下を目指してください。人件費か原価に問題がある可能性があります。`});
+  else if(flRatio>55) issues.push({l:'mid',t:'FL比率がやや高めです',s:`現在 ${flRatio.toFixed(1)}% — 許容範囲ですが改善余地あり。`});
+  else issues.push({l:'low',t:'FL比率は健全です',s:`現在 ${flRatio.toFixed(1)}% — 良好な水準です。`});
+
+  if(profit<0) issues.push({l:'high',t:'赤字です',s:`月 ${fmt(Math.abs(profit))}円の損失。${breakEven!==Infinity?'損益分岐点まで '+fmt(breakEven-revenue)+'円の売上アップが必要です。':''}`});
+  else if(marginRate<5) issues.push({l:'mid',t:'利益率が低水準です',s:`利益率 ${marginRate.toFixed(1)}% — 固定費の見直しか売上増加が有効です。`});
+  else issues.push({l:'low',t:'黒字経営です',s:`利益率 ${marginRate.toFixed(1)}% — 現状維持しながらさらなる改善を目指しましょう。`});
+
+  if(staff>0){
+    if(laborPerHour<3000) issues.push({l:'high',t:'人時売上高が低いです',s:`${fmt(laborPerHour)}円/人時 — スタッフ配置・シフト設計の見直しを検討してください。`});
+    else if(laborPerHour<5000) issues.push({l:'mid',t:'人時売上高に改善余地があります',s:`${fmt(laborPerHour)}円/人時 — ピーク時間帯への集中配置が効果的です。`});
+    else issues.push({l:'low',t:'人時売上高は良好です',s:`${fmt(laborPerHour)}円/人時 — 効率的なスタッフ配置ができています。`});
+  }
+
+  if(breakEven!==Infinity&&revenue<breakEven)
+    issues.push({l:'high',t:'売上が損益分岐点を下回っています',s:`あと ${fmt(breakEven-revenue)}円 / 月の売上が必要です。客単価アップかリピート率改善を優先してください。`});
+
+  if(unitPrice>0&&unitPrice<1000)
+    issues.push({l:'mid',t:'客単価が低めです',s:`現在 ${fmt(unitPrice)}円 — セット販売やアップセル施策で単価向上を検討してください。`});
+
+  document.getElementById('bottleneck-list').innerHTML=issues.map(i=>`
+    <li class="bottleneck-item">
+      <span class="bn-tag ${i.l}">${i.l==='high'?'要改善':i.l==='mid'?'注意':'良好'}</span>
+      <div><p class="bn-text">${i.t}</p><p class="bn-sub">${i.s}</p></div>
+    </li>`).join('');
+
+  document.getElementById('bottleneck-panel').style.display='block';
+  document.getElementById('copy-btn').style.display='inline-block';
+  window._last={revenue,customers,unitPrice,profit,flRatio,breakEven,laborPerHour,marginRate};
+
+  // 【追加機能】月次グラフタブの入力エリアへ自動反映
+  syncToGraphTab(targetMonth, revenue, fixed, fl);
+}
+
+function syncToGraphTab(month, revenue, fixed, fl) {
+  if (!month) return;
+  const entriesContainer = document.getElementById('month-entries');
+  const entries = entriesContainer.querySelectorAll('.month-entry');
+  let exists = false;
+
+  // すでに同じ月が存在するかチェックし、あれば更新
+  entries.forEach(e => {
+    const inputs = e.querySelectorAll('input');
+    if (inputs[0].value === month) {
+      inputs[1].value = Math.round(revenue);
+      inputs[2].value = Math.round(fixed);
+      inputs[3].value = Math.round(fl);
+      exists = true;
+    }
+  });
+
+  // 存在しなければ新しく行を追加して値をセット
+  if (!exists) {
+    addMonthRowWithValue(month, Math.round(revenue), Math.round(fixed), Math.round(fl));
+  }
+
+  // 自動的にバックグラウンドでグラフも再描画
+  drawChart(true);
+}
+
+function addMonthRowWithValue(month, revenue, fixed, fl) {
+  const div = document.createElement('div');
+  div.className = 'month-entry';
+  div.innerHTML = `
+    <div class="field"><label>対象月</label><input type="month" value="${month}" /></div>
+    <div class="field"><label>売上（円）</label><input type="number" value="${revenue}" placeholder="1000000" /></div>
+    <div class="field"><label>固定費（円）</label><input type="number" value="${fixed}" placeholder="300000" /></div>
+    <div class="field"><label>FL合計（円）</label><input type="number" value="${fl}" placeholder="550000" /></div>
+    <button class="del-btn" onclick="this.parentElement.remove()" title="削除">✕</button>`;
+  document.getElementById('month-entries').appendChild(div);
+}
+
+function copyResult(){
+  const r=window._last;if(!r)return;
+  const lines=['【店舗ボトルネック診断結果】',
+    `売上: ${fmt(r.revenue)}円`,
+    r.customers?`客数: ${fmt(r.customers)}人 / 客単価: ${fmt(r.unitPrice)}円`:'',
+    `FL比率: ${r.flRatio.toFixed(1)}%`,
+    `営業利益: ${fmt(r.profit)}円（利益率 ${r.marginRate.toFixed(1)}%）`,
+    r.breakEven!==Infinity?`損益分岐点: ${fmt(r.breakEven)}円`:'',
+    r.laborPerHour?`人時売上高: ${fmt(r.laborPerHour)}円`:'',
+  ].filter(Boolean);
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>{
+    const b=document.getElementById('copy-btn');
+    b.textContent='✅ コピーしました';
+    setTimeout(()=>{b.textContent='📋 結果をコピー';},2000);
+  });
+}
+
+let chartInstance=null,monthCount=0;
+function addMonth(){
+  monthCount++;
+  const now=new Date();
+  const m=String(now.getMonth()+2-monthCount).padStart(2,'0');
+  const yr=now.getFullYear();
+  addMonthRowWithValue(`${yr}-${m}`, "", "", "");
+}
+
+function drawChart(isSilent = false){
+  const entries=document.querySelectorAll('.month-entry');
+  if(!entries.length){
+    if(!isSilent) alert('月のデータを追加してください');
+    return;
+  }
+  
+  const dataList = [];
+  entries.forEach(e=>{
+    const inp=e.querySelectorAll('input');
+    const m = inp[0].value || '?';
+    const rev=parseFloat(inp[1].value)||0;
+    const fix=parseFloat(inp[2].value)||0;
+    const fl=parseFloat(inp[3].value)||0;
+    if (inp[1].value || inp[2].value || inp[3].value) {
+      dataList.push({ m, rev, prof: (rev - fl - fix) });
+    }
+  });
+
+  // 月順にソートして並び順を整える
+  dataList.sort((a, b) => a.m.localeCaseInsensitiveCompare ? a.m.localeCaseInsensitiveCompare(b.m) : a.m.localeCompare(b.m));
+
+  if (dataList.length === 0) return;
+
+  const labels = dataList.map(d => d.m);
+  const revenues = dataList.map(d => d.rev);
+  const profits = dataList.map(d => d.prof);
+
+  document.getElementById('chart-panel').style.display='block';
+  if(chartInstance)chartInstance.destroy();
+  const ctx=document.getElementById('trendChart').getContext('2d');
+  chartInstance=new Chart(ctx,{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'売上',data:revenues,backgroundColor:'rgba(94,255,184,0.15)',borderColor:'#5effb8',borderWidth:2,borderRadius:4,order:2},
+      {label:'営業利益',data:profits,type:'line',borderColor:'#ffd97d',backgroundColor:'rgba(255,217,125,0.1)',borderWidth:2,pointRadius:5,pointBackgroundColor:'#ffd97d',tension:.3,fill:true,order:1}
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#94a1c1',font:{family:'Space Grotesk',size:12}}},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${Math.round(c.parsed.y).toLocaleString('ja-JP')}円`}}},
+      scales:{
+        x:{ticks:{color:'#94a1c1'},grid:{color:'#2a3050'}},
+        y:{ticks:{color:'#94a1c1',callback:v=>(v/10000).toFixed(0)+'万円'},grid:{color:'#2a3050'}}
+      }
+    }
+  });
+}
+
+// 初期データのダミー生成を抑止し、スマートな運用ができるように変更
+</script>
 </body>
 </html>
