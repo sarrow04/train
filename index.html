@@ -1,487 +1,639 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>店舗ボトルネック診断シミュレーター</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Space+Grotesk:wght@400;600;700&display=swap');
-    :root {
-      --bg: #0f1117;
-      --surface: #181c27;
-      --surface2: #1e2333;
-      --border: #2a3050;
-      
-      /* 視認性を向上させたアクセントカラー（高コントラスト） */
-      --accent: #5effb8;       /* 良好：鮮やかなミントグリーン */
-      --accent2: #ff7b7b;      /* 要改善：明るいコーラルレッド */
-      --accent3: #ffd97d;      /* 注意：視認性の高いパステルイエロー */
-      
-      --text: #e8ecf4;
-      --muted: #94a1c1;        /* テキストの沈み込みを防ぐため少し明るく修正 */
-      --font-data: 'Space Grotesk', sans-serif;
-      --font-body: 'Noto Sans JP', sans-serif;
-    }
-    *{box-sizing:border-box;margin:0;padding:0;}
-    body{background:var(--bg);color:var(--text);font-family:var(--font-body);min-height:100vh;padding-bottom:80px;}
-
-    header{border-bottom:1px solid var(--border);padding:18px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:100;}
-    .logo-wrap{display:flex;align-items:baseline;gap:14px;}
-    .logo{font-family:var(--font-data);font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.14em;text-transform:uppercase;}
-    header h1{font-family:var(--font-data);font-size:16px;font-weight:700;}
-    nav{display:flex;gap:4px;}
-    nav button{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:var(--font-body);font-size:13px;padding:6px 14px;cursor:pointer;transition:all .15s;}
-    nav button.active,nav button:hover{border-color:var(--accent);color:var(--accent);}
-
-    .tab-content{display:none;}
-    .tab-content.active{display:block;}
-
-    .container{max-width:1040px;margin:0 auto;padding:36px 24px;}
-    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
-    @media(max-width:740px){.grid-2{grid-template-columns:1fr;}header{flex-direction:column;gap:12px;align-items:flex-start;}}
-
-    .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;}
-    .panel-title{font-family:var(--font-data);font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:20px;}
-    .full-width{grid-column:1/-1;}
-
-    .field{margin-bottom:16px;}
-    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px;}
-    input[type=number],input[type=month]{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--font-data);font-size:16px;font-weight:600;outline:none;transition:border-color .2s;}
-    input:focus{border-color:var(--accent);}
-    input::placeholder{color:var(--border);font-weight:400;}
-    .unit{font-size:11px;color:var(--muted);margin-top:4px;}
-    .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-
-    .calc-btn{width:100%;margin-top:8px;background:var(--accent);color:#0f1117;border:none;border-radius:8px;padding:14px;font-family:var(--font-data);font-size:15px;font-weight:700;cursor:pointer;transition:opacity .2s;}
-    .calc-btn:hover{opacity:.85;}
-    .sec-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-data);font-size:13px;font-weight:600;padding:10px 18px;cursor:pointer;transition:border-color .2s;}
-    .sec-btn:hover{border-color:var(--accent);color:var(--accent);}
-
-    .result-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
-    .metric{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;}
-    .metric-label{font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:.06em;}
-    .metric-value{font-family:var(--font-data);font-size:22px;font-weight:700;}
-    
-    /* 文字色のコントラストと太さを強化 */
-    .metric-value.good{color:var(--accent);text-shadow: 0 0 1px rgba(94,255,184,0.2);}
-    .metric-value.warn{color:var(--accent3);text-shadow: 0 0 1px rgba(255,217,125,0.2);}
-    .metric-value.bad{color:var(--accent2);text-shadow: 0 0 1px rgba(255,123,123,0.2);}
-    .metric-sub{font-size:11px;color:var(--muted);margin-top:4px;}
-
-    .bottleneck-list{list-style:none;}
-    .bottleneck-item{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);}
-    .bottleneck-item:last-child{border-bottom:none;}
-    .bn-tag{flex-shrink:0;font-family:var(--font-data);font-size:10px;font-weight:700;letter-spacing:.1em;padding:4px 10px;border-radius:4px;text-transform:uppercase;margin-top:2px;}
-    
-    /* タグ内の文字の認識率を高めるため、背景を少し濃くして文字色をはっきりと */
-    .bn-tag.high{background:rgba(255,123,123,0.22);color:var(--accent2);}
-    .bn-tag.mid{background:rgba(255,217,125,0.22);color:var(--accent3);}
-    .bn-tag.low{background:rgba(94,255,184,0.22);color:var(--accent);}
-    .bn-text{font-size:14px;line-height:1.6;font-weight:500;}
-    .bn-sub{font-size:12px;color:var(--muted);margin-top:2px;}
-
-    .copy-bar{display:flex;justify-content:flex-end;margin-bottom:12px;}
-
-    .month-entry{display:grid;grid-template-columns:160px 1fr 1fr 1fr 36px;gap:10px;align-items:end;margin-bottom:10px;}
-    @media(max-width:600px){.month-entry{grid-template-columns:1fr 1fr;}}
-    .del-btn{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:16px;width:36px;height:42px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
-    .del-btn:hover{border-color:var(--accent2);color:var(--accent2);}
-    .chart-wrap{position:relative;height:320px;margin-top:24px;}
-
-    .empty-state{text-align:center;color:var(--muted);font-size:14px;padding:40px 0;}
-    .empty-state .big{font-family:var(--font-data);font-size:40px;margin-bottom:8px;}
-
-    /* manual */
-    .manual {max-width:720px;}
-    .manual h2{font-family:var(--font-data);font-size:18px;font-weight:700;margin:36px 0 12px;border-bottom:1px solid var(--border);padding-bottom:8px;}
-    .manual h2:first-child{margin-top:0;}
-    .manual h3{font-size:13px;font-weight:700;color:var(--accent);margin:20px 0 8px;font-family:var(--font-data);letter-spacing:.06em;text-transform:uppercase;}
-    .manual p{font-size:14px;line-height:1.9;margin-bottom:12px;}
-    .manual ul,.manual ol{padding-left:20px;margin-bottom:12px;}
-    .manual li{font-size:14px;line-height:1.9;}
-    .manual table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px;}
-    .manual th{background:var(--surface2);border:1px solid var(--border);padding:10px 12px;text-align:left;font-family:var(--font-data);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
-    .manual td{border:1px solid var(--border);padding:10px 12px;line-height:1.6;vertical-align:top;}
-    .formula{background:var(--surface2);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;font-family:var(--font-data);font-size:14px;margin:12px 0;color:var(--accent);font-weight:600;}
-    .badge-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
-    .badge{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:6px 12px;border-radius:6px;font-weight:500;}
-    .badge.good{background:rgba(94,255,184,0.15);color:var(--accent);}
-    .badge.warn{background:rgba(255,217,125,0.15);color:var(--accent3);}
-    .badge.bad{background:rgba(255,123,123,0.15);color:var(--accent2);}
-    .tip{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-size:13px;line-height:1.8;margin-bottom:12px;color:var(--muted);}
-    .tip strong{color:var(--text);}
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>フェルミ推定シート</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0B1120; --surface: #111827; --surface2: #1E293B;
+    --border: #1E3A5F; --blue: #3B82F6; --blue-light: #60A5FA;
+    --blue-glow: rgba(59,130,246,0.15); --green: #10B981; --amber: #F59E0B;
+    --text: #E2E8F0; --muted: #64748B; --label: #94A3B8;
+    --mono: 'JetBrains Mono', monospace; --sans: 'Inter', sans-serif;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; line-height: 1.6; }
+  header { border-bottom: 1px solid var(--border); padding: 20px 24px; display: flex; align-items: center; gap: 14px; background: var(--surface); }
+  .logo-mark { width: 36px; height: 36px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 14px; font-weight: 600; color: #fff; flex-shrink: 0; }
+  header h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+  header span { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 24px; background: var(--surface); overflow-x: auto; }
+  .tab { padding: 14px 20px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: color .2s, border-color .2s; background: none; border-top: none; border-left: none; border-right: none; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--blue-light); border-bottom-color: var(--blue); }
+  .main { max-width: 860px; margin: 0 auto; padding: 32px 24px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .section-label { font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--blue); margin-bottom: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--label); margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+  .card-title::before { content: ''; display: block; width: 3px; height: 14px; background: var(--blue); border-radius: 2px; }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 560px) { .field-grid { grid-template-columns: 1fr; } }
+  .field-grid.cols3 { grid-template-columns: 1fr 1fr 1fr; }
+  @media (max-width: 680px) { .field-grid.cols3 { grid-template-columns: 1fr 1fr; } }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  label { font-size: 11px; font-weight: 500; color: var(--label); letter-spacing: 0.03em; }
+  input[type="number"], input[type="text"], select { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; font-family: var(--mono); font-size: 13px; color: var(--text); outline: none; transition: border-color .2s, box-shadow .2s; width: 100%; -moz-appearance: textfield; }
+  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  input:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-glow); }
+  select { cursor: pointer; }
+  select option { background: var(--surface2); }
+  .result-box { background: linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(16,185,129,0.06) 100%); border: 1px solid rgba(59,130,246,0.3); border-radius: 12px; padding: 24px 28px; margin-top: 8px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+  .result-main { flex: 1; min-width: 180px; }
+  .result-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; letter-spacing: 0.05em; }
+  .result-value { font-family: var(--mono); font-size: 38px; font-weight: 600; color: var(--blue-light); letter-spacing: -1px; line-height: 1.1; }
+  .result-unit { font-size: 14px; color: var(--muted); margin-top: 2px; }
+  .result-subs { display: flex; flex-direction: column; gap: 10px; }
+  .sub-item { display: flex; flex-direction: column; gap: 2px; }
+  .sub-label { font-size: 10px; color: var(--muted); }
+  .sub-value { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--green); }
+  .pop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 4px; }
+  .pop-cell { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
+  .pop-key { font-size: 10px; color: var(--muted); }
+  .pop-val { font-family: var(--mono); font-size: 13px; color: var(--text); }
+  .coeff-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+  .coeff-item { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 120px; }
+  .hint { font-size: 10px; color: var(--muted); margin-top: 4px; font-style: italic; }
+  /* Toggle buttons */
+  .toggle-group { display: flex; flex-wrap: wrap; gap: 8px; }
+  .toggle { padding: 7px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 12px; font-weight: 500; cursor: pointer; transition: all .15s; font-family: var(--sans); }
+  .toggle:hover { border-color: var(--blue); color: var(--text); }
+  .toggle.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+  /* Pop badge */
+  .pop-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); border-radius: 6px; padding: 6px 12px; font-family: var(--mono); font-size: 13px; color: var(--green); margin-top: 10px; }
+  .pop-badge-label { font-size: 10px; color: var(--muted); font-family: var(--sans); }
+  /* picker section */
+  .picker-section { margin-bottom: 14px; }
+  .picker-section label { display: block; margin-bottom: 8px; }
+  @media (max-width: 420px) { .result-value { font-size: 28px; } .main { padding: 20px 16px; } .card { padding: 18px; } }
+</style>
 </head>
 <body>
 
 <header>
-  <div class="logo-wrap">
-    <span class="logo">Bottleneck</span>
-    <h1>店舗ボトルネック診断シミュレーター</h1>
+  <div class="logo-mark">フ</div>
+  <div>
+    <h1>フェルミ推定シート</h1>
+    <span>市場規模を数字で捉える</span>
   </div>
-  <nav>
-    <button class="active" onclick="showTab('diagnose',this)">診断</button>
-    <button onclick="showTab('graph',this)">月次グラフ</button>
-    <button onclick="showTab('manual',this)">使い方</button>
-  </nav>
 </header>
 
-<div id="tab-diagnose" class="tab-content active">
-<div class="container"><div class="grid-2">
-
-  <div class="panel">
-    <p class="panel-title">データ入力</p>
-    <div class="field">
-      <label>対象月（月次グラフに自動反映されます）</label>
-      <input type="month" id="targetMonth" />
-    </div>
-    <div class="field-row">
-      <div class="field"><label>月間売上</label><input type="number" id="revenue" placeholder="1000000" /><p class="unit">円 / 月</p></div>
-      <div class="field"><label>月間客数</label><input type="number" id="customers" placeholder="300" /><p class="unit">人 / 月</p></div>
-    </div>
-    <div class="field"><label>客単価（売上÷客数 で自動計算）</label><input type="number" id="unitPrice" placeholder="3300" /><p class="unit">円</p></div>
-    <div class="field-row">
-      <div class="field"><label>1日の営業時間</label><input type="number" id="hours" placeholder="10" /><p class="unit">時間</p></div>
-      <div class="field"><label>月間営業日数</label><input type="number" id="days" placeholder="25" /><p class="unit">日</p></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>アルバイト（同時稼働平均）</label><input type="number" id="staff" placeholder="3" /><p class="unit">人</p></div>
-      <div class="field"><label>平均時給</label><input type="number" id="wage" placeholder="1100" /><p class="unit">円</p></div>
-    </div>
-    <div class="field"><label>月間固定費</label><input type="number" id="fixed" placeholder="300000" /><p class="unit">円（家賃・光熱費など）</p></div>
-    <div class="field"><label>原価率</label><input type="number" id="costRate" placeholder="30" /><p class="unit">%（飲食 30〜35%、小売 50〜60% が目安）</p></div>
-    <button class="calc-btn" onclick="calculate()">ボトルネックを診断する</button>
-  </div>
-
-  <div class="panel">
-    <p class="panel-title">診断結果</p>
-    <div class="copy-bar"><button class="sec-btn" onclick="copyResult()" id="copy-btn" style="display:none">📋 結果をコピー</button></div>
-    <div id="result-content">
-      <div class="empty-state"><div class="big">📊</div>左のデータを入力して<br>診断してください</div>
-    </div>
-  </div>
-
-  <div class="panel full-width" id="bottleneck-panel" style="display:none">
-    <p class="panel-title">ボトルネック分析</p>
-    <ul class="bottleneck-list" id="bottleneck-list"></ul>
-  </div>
-
-</div></div>
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('basic',this)">基本計算</button>
+  <button class="tab" onclick="switchTab('detail',this)">詳細推定</button>
+  <button class="tab" onclick="switchTab('store',this)">店舗ベース推定</button>
+  <button class="tab" onclick="switchTab('pop',this)">人口データ</button>
 </div>
 
-<div id="tab-graph" class="tab-content">
-<div class="container"><div class="grid-2">
+<div class="main">
 
-  <div class="panel full-width">
-    <p class="panel-title">月次データ入力</p>
-    <div id="month-entries"></div>
-    <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;">
-      <button class="sec-btn" onclick="addMonth()">＋ 月を追加</button>
-      <button class="calc-btn" style="max-width:180px" onclick="drawChart()">グラフを更新</button>
+<!-- ═══ TAB 1: 基本計算 ═══ -->
+<div id="panel-basic" class="panel active">
+  <p class="section-label">基本計算シート</p>
+  <div class="card">
+    <div class="card-title">地域の市場規模</div>
+    <div class="field-grid">
+      <div class="field">
+        <label>対象人数（人）</label>
+        <input type="number" id="b_pop" value="10000" oninput="calcBasic()">
+        <p class="hint">例：店舗周辺の人口やターゲット層の人数</p>
+      </div>
+      <div class="field">
+        <label>年間利用回数（回）</label>
+        <input type="number" id="b_freq" value="12" oninput="calcBasic()">
+        <p class="hint">例：1ヶ月に1回なら「12」</p>
+      </div>
+      <div class="field">
+        <label>1回あたりの客単価（円）</label>
+        <input type="number" id="b_price" value="3000" oninput="calcBasic()">
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">自社売上シミュレーション</div>
+    <div class="field-grid">
+      <div class="field">
+        <label>想定市場シェア（%）</label>
+        <input type="number" id="b_share" value="3" step="0.1" oninput="calcBasic()">
+      </div>
+    </div>
+  </div>
+  <div class="result-box">
+    <div class="result-main">
+      <div class="result-label">地域市場規模（年間）</div>
+      <div class="result-value" id="b_market">3,600</div>
+      <div class="result-unit">万円 / 年</div>
+    </div>
+    <div class="result-subs">
+      <div class="sub-item"><div class="sub-label">自社見込み年商</div><div class="sub-value" id="b_annual">108万円</div></div>
+      <div class="sub-item"><div class="sub-label">自社見込み月商</div><div class="sub-value" id="b_monthly">9万円</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TAB 2: 詳細推定 ═══ -->
+<div id="panel-detail" class="panel">
+  <p class="section-label">詳細推定シート</p>
+
+  <div class="card">
+    <div class="card-title">基本情報</div>
+    <div class="field-grid" style="margin-bottom:20px;">
+      <div class="field">
+        <label>お題（業種など）</label>
+        <input type="text" id="d_topic" value="ピザ">
+      </div>
+      <div class="field">
+        <label>駅名</label>
+        <select id="d_station" onchange="applyPopPicker('d')">
+          <option value="">-- 選択 --</option>
+          <option value="阿佐ヶ谷" selected>阿佐ヶ谷</option>
+          <option value="高円寺">高円寺</option>
+          <option value="荻窪">荻窪</option>
+          <option value="中野">中野</option>
+          <option value="吉祥寺">吉祥寺</option>
+          <option value="西荻窪">西荻窪</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="picker-section">
+      <label>性別</label>
+      <div class="toggle-group" id="d_gender_group">
+        <button class="toggle active" data-val="all" onclick="togglePicker('d','gender',this)">すべて</button>
+        <button class="toggle" data-val="女性" onclick="togglePicker('d','gender',this)">女性</button>
+        <button class="toggle" data-val="男性" onclick="togglePicker('d','gender',this)">男性</button>
+      </div>
+    </div>
+
+    <div class="picker-section">
+      <label>年代（複数選択可）</label>
+      <div class="toggle-group" id="d_age_group">
+        <button class="toggle active" data-val="all" onclick="togglePicker('d','age',this)">すべて</button>
+        <button class="toggle" data-val="10代以下" onclick="togglePicker('d','age',this)">10代以下</button>
+        <button class="toggle" data-val="10代" onclick="togglePicker('d','age',this)">10代</button>
+        <button class="toggle" data-val="20代" onclick="togglePicker('d','age',this)">20代</button>
+        <button class="toggle" data-val="30代" onclick="togglePicker('d','age',this)">30代</button>
+        <button class="toggle" data-val="40代" onclick="togglePicker('d','age',this)">40代</button>
+        <button class="toggle" data-val="50代" onclick="togglePicker('d','age',this)">50代</button>
+        <button class="toggle" data-val="60代" onclick="togglePicker('d','age',this)">60代</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="pop-badge-label">→ ターゲット人口</div>
+      <div class="pop-badge" id="d_pop_badge">21,500 人</div>
     </div>
   </div>
 
-  <div class="panel full-width" id="chart-panel" style="display:none">
-    <p class="panel-title">売上・利益 推移</p>
-    <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+  <div class="card">
+    <div class="card-title">ターゲット設定</div>
+    <div class="field-grid cols3">
+      <div class="field">
+        <label>ターゲット人口（人）</label>
+        <input type="number" id="d_pop" value="21500" oninput="calcDetail()">
+        <p class="hint">上の選択で自動入力されます</p>
+      </div>
+      <div class="field">
+        <label>利用率（%）</label>
+        <input type="number" id="d_rate" value="80" step="0.1" oninput="calcDetail()">
+      </div>
+      <div class="field">
+        <label>年間利用回数（回）</label>
+        <input type="number" id="d_freq" value="24" oninput="calcDetail()">
+      </div>
+      <div class="field">
+        <label>平均客単価（円）</label>
+        <input type="number" id="d_price" value="3500" oninput="calcDetail()">
+      </div>
+      <div class="field">
+        <label>稼働率・補正係数（%）</label>
+        <input type="number" id="d_adj" value="90" step="0.1" oninput="calcDetail()">
+      </div>
+    </div>
   </div>
 
-</div></div>
+  <div class="card">
+    <div class="card-title">競合状況</div>
+    <div class="field-grid cols3">
+      <div class="field"><label>現在の個人店数</label><input type="number" id="d_ind" value="10" oninput="calcDetail()"></div>
+      <div class="field"><label>現在のチェーン店数</label><input type="number" id="d_chain" value="0" oninput="calcDetail()"></div>
+      <div class="field"><label>新規チェーン参入数</label><input type="number" id="d_newchain" value="1" oninput="calcDetail()"></div>
+    </div>
+  </div>
+
+  <div class="result-box">
+    <div class="result-main">
+      <div class="result-label">最終推計結果</div>
+      <div class="result-value" id="d_result">13.0</div>
+      <div class="result-unit">億円 / 年</div>
+    </div>
+    <div class="result-subs">
+      <div class="sub-item"><div class="sub-label">ベース市場（補正前）</div><div class="sub-value" id="d_base">—</div></div>
+      <div class="sub-item"><div class="sub-label">総店舗数</div><div class="sub-value" id="d_stores">—</div></div>
+    </div>
+  </div>
 </div>
 
-<div id="tab-manual" class="tab-content">
-<div class="container"><div class="manual">
+<!-- ═══ TAB 3: 店舗ベース推定 ═══ -->
+<div id="panel-store" class="panel">
+  <p class="section-label">店舗ベース推定シート</p>
 
-  <h2>このツールについて</h2>
-  <p>店舗の基本データを入力するだけで、<strong>FL比率・損益分岐点・人時売上高・客単価</strong>などの経営指標を自動計算し、どこにボトルネックがあるかを即座に診断します。専門知識がなくても「数字で課題を見つける」習慣をサポートします。</p>
+  <div class="card">
+    <div class="card-title">基本情報・エリア人口</div>
+    <div class="field-grid" style="margin-bottom:20px;">
+      <div class="field">
+        <label>お題（業種など）</label>
+        <input type="text" id="s_topic" value="阿佐ヶ谷ピザ">
+      </div>
+      <div class="field">
+        <label>駅名</label>
+        <select id="s_station" onchange="applyPopPicker('s')">
+          <option value="">-- 選択 --</option>
+          <option value="阿佐ヶ谷" selected>阿佐ヶ谷</option>
+          <option value="高円寺">高円寺</option>
+          <option value="荻窪">荻窪</option>
+          <option value="中野">中野</option>
+          <option value="吉祥寺">吉祥寺</option>
+          <option value="西荻窪">西荻窪</option>
+        </select>
+      </div>
+    </div>
 
-  <h2>入力項目の説明</h2>
-  <table>
-    <tr><th>項目</th><th>説明</th><th>入力例</th></tr>
-    <tr><td>対象月</td><td>診断を行う年月。入力すると月次グラフのデータに自動同期されます</td><td>2026-06</td></tr>
-    <tr><td>月間売上</td><td>その月の総売上（税抜き推奨）</td><td>1,000,000 円</td></tr>
-    <tr><td>月間客数</td><td>月間の延べ来店人数</td><td>300 人</td></tr>
-    <tr><td>客単価</td><td>1人あたりの平均購入額。売上と客数を両方入れると自動計算されます</td><td>3,300 円</td></tr>
-    <tr><td>1日の営業時間</td><td>開店〜閉店までの時間数</td><td>10 時間</td></tr>
-    <tr><td>月間営業日数</td><td>実際に営業した日数</td><td>25 日</td></tr>
-    <tr><td>アルバイト人数</td><td>同時に稼働している平均人数（社員は別途換算）</td><td>3 人</td></tr>
-    <tr><td>平均時給</td><td>スタッフ全員の平均時給</td><td>1,100 円</td></tr>
-    <tr><td>月間固定費</td><td>家賃・光熱費・リース料など変動しない費用の合計</td><td>300,000 円</td></tr>
-    <tr><td>原価率</td><td>売上に対する原材料費の割合</td><td>30 %</td></tr>
-  </table>
+    <div class="picker-section">
+      <label>性別</label>
+      <div class="toggle-group" id="s_gender_group">
+        <button class="toggle active" data-val="all" onclick="togglePicker('s','gender',this)">すべて</button>
+        <button class="toggle" data-val="女性" onclick="togglePicker('s','gender',this)">女性</button>
+        <button class="toggle" data-val="男性" onclick="togglePicker('s','gender',this)">男性</button>
+      </div>
+    </div>
 
-  <h2>計算される指標</h2>
+    <div class="picker-section">
+      <label>年代（複数選択可）</label>
+      <div class="toggle-group" id="s_age_group">
+        <button class="toggle active" data-val="all" onclick="togglePicker('s','age',this)">すべて</button>
+        <button class="toggle" data-val="10代以下" onclick="togglePicker('s','age',this)">10代以下</button>
+        <button class="toggle" data-val="10代" onclick="togglePicker('s','age',this)">10代</button>
+        <button class="toggle" data-val="20代" onclick="togglePicker('s','age',this)">20代</button>
+        <button class="toggle" data-val="30代" onclick="togglePicker('s','age',this)">30代</button>
+        <button class="toggle" data-val="40代" onclick="togglePicker('s','age',this)">40代</button>
+        <button class="toggle" data-val="50代" onclick="togglePicker('s','age',this)">50代</button>
+        <button class="toggle" data-val="60代" onclick="togglePicker('s','age',this)">60代</button>
+      </div>
+    </div>
 
-  <h3>FL比率</h3>
-  <div class="formula">FL比率 = (人件費 + 原価) ÷ 売上 × 100</div>
-  <div class="badge-row">
-    <span class="badge good">🟢 55%以下：優良</span>
-    <span class="badge warn">🟡 55〜65%：標準（要ウォッチ）</span>
-    <span class="badge bad">🔴 65%超：危険ゾーン</span>
-  </div>
-  <p>飲食店の健全経営の目安は <strong>60%以下</strong> と言われています。</p>
-
-  <h3>損益分岐点売上</h3>
-  <div class="formula">損益分岐点 = 固定費 ÷ (1 − 変動費率)</div>
-  <p>この金額を下回ると赤字になります。月の売上目標設定の基準として使ってください。</p>
-
-  <h3>人時売上高</h3>
-  <div class="formula">人時売上高 = 売上 ÷ (スタッフ人数 × 総労働時間)</div>
-  <div class="badge-row">
-    <span class="badge good">🟢 5,000円以上：良好</span>
-    <span class="badge warn">🟡 3,000〜5,000円：改善余地あり</span>
-    <span class="badge bad">🔴 3,000円未満：配置見直しが必要</span>
-  </div>
-
-  <h3>客単価</h3>
-  <div class="formula">客単価 = 売上 ÷ 客数</div>
-  <p>客単価が低い場合は、アップセル（追加注文の促進）やセット商品の導入が有効です。</p>
-
-  <h2>ボトルネック判定の見方</h2>
-  <div class="badge-row">
-    <span class="badge bad">🔴 要改善</span>
-    <span class="badge warn">🟡 注意</span>
-    <span class="badge good">🟢 良好</span>
-  </div>
-  <p><strong>要改善</strong> の項目から優先的に対処してください。すべて良好になることを目指しましょう。</p>
-
-  <h2>よくある改善パターン</h2>
-
-  <h3>FL比率が高い場合</h3>
-  <div class="tip">
-    <strong>人件費が高い</strong> → シフトの最適化、ピーク外の人員削減<br>
-    <strong>原価率が高い</strong> → 仕入れ見直し、廃棄ロスの削減、メニューの価格改定
+    <div>
+      <div class="pop-badge-label">→ エリア人口（参考）</div>
+      <div class="pop-badge" id="s_pop_badge">26,700 人</div>
+    </div>
   </div>
 
-  <h3>損益分岐点を超えられない場合</h3>
-  <div class="tip">
-    <strong>客単価を上げる</strong> → メニュー構成・アップセル施策<br>
-    <strong>固定費を下げる</strong> → 家賃交渉、不要なリースの見直し<br>
-    <strong>客数を増やす</strong> → リピート施策、SNS活用
+  <div class="card">
+    <div class="card-title">店舗パラメータ</div>
+    <div class="field-grid cols3">
+      <div class="field"><label>想定店舗数（店）</label><input type="number" id="s_shops" value="5" oninput="calcStore()"></div>
+      <div class="field"><label>平均席数（席）</label><input type="number" id="s_seats" value="30" oninput="calcStore()"></div>
+      <div class="field"><label>1日平均回転数（回）</label><input type="number" id="s_turns" value="3" step="0.1" oninput="calcStore()"></div>
+      <div class="field"><label>平均客単価（円）</label><input type="number" id="s_price" value="3000" oninput="calcStore()"></div>
+    </div>
   </div>
 
-  <h3>人時売上高が低い場合</h3>
-  <div class="tip">
-    <strong>ピーク時間帯を特定する</strong> → 混む時間帯だけ増員、閑散時は削減<br>
-    <strong>作業の効率化</strong> → 仕込みのタイミング見直し、マルチタスク化
+  <div class="card">
+    <div class="card-title">補正係数</div>
+    <div class="coeff-row">
+      <div class="coeff-item"><label>コロナ後影響（%、例：-20）</label><input type="number" id="s_covid" value="-20" oninput="calcStore()"></div>
+      <div class="coeff-item"><label>経済情勢影響（%、例：-5）</label><input type="number" id="s_econ" value="-5" oninput="calcStore()"></div>
+    </div>
   </div>
 
-  <h2>月次グラフの使い方</h2>
-  <ol>
-    <li>「診断」タブで「対象月」を指定して診断すると、自動的に「月次グラフ」にデータが蓄積されます。</li>
-    <li>手動で微調整や別月のデータを加えたい場合は、「月次グラフ」タブから直接「＋ 月を追加」を行ってください。</li>
-    <li>「グラフを更新」ボタンを押すことで、売上と営業利益の推移が可視化されます。</li>
-  </ol>
-  <p>複数月のデータを入れることで、改善施策の効果を視覚的に確認できます。</p>
-
-</div></div>
+  <div class="result-box">
+    <div class="result-main">
+      <div class="result-label">最終推計結果</div>
+      <div class="result-value" id="s_result">4.9</div>
+      <div class="result-unit">億円 / 年</div>
+    </div>
+    <div class="result-subs">
+      <div class="sub-item"><div class="sub-label">補正前年間売上</div><div class="sub-value" id="s_base">—</div></div>
+      <div class="sub-item"><div class="sub-label">1日あたり売上</div><div class="sub-value" id="s_daily">—</div></div>
+    </div>
+  </div>
 </div>
+
+<!-- ═══ TAB 4: 人口データ ═══ -->
+<div id="panel-pop" class="panel">
+  <p class="section-label">エリア別人口データ</p>
+  <div class="card">
+    <div class="card-title">条件を選択</div>
+    <div class="field" style="margin-bottom:16px;">
+      <label>駅名</label>
+      <select id="pop_station" onchange="renderPop()">
+        <option value="all">すべての駅</option>
+        <option value="阿佐ヶ谷">阿佐ヶ谷</option>
+        <option value="高円寺">高円寺</option>
+        <option value="荻窪">荻窪</option>
+        <option value="中野">中野</option>
+        <option value="吉祥寺">吉祥寺</option>
+        <option value="西荻窪">西荻窪</option>
+      </select>
+    </div>
+    <div class="picker-section">
+      <label>性別</label>
+      <div class="toggle-group" id="pop_gender_group">
+        <button class="toggle active" data-val="all" onclick="togglePicker('pop','gender',this)">すべて</button>
+        <button class="toggle" data-val="女性" onclick="togglePicker('pop','gender',this)">女性</button>
+        <button class="toggle" data-val="男性" onclick="togglePicker('pop','gender',this)">男性</button>
+      </div>
+    </div>
+    <div class="picker-section">
+      <label>年代（複数選択可）</label>
+      <div class="toggle-group" id="pop_age_group">
+        <button class="toggle active" data-val="all" onclick="togglePicker('pop','age',this)">すべて</button>
+        <button class="toggle" data-val="10代以下" onclick="togglePicker('pop','age',this)">10代以下</button>
+        <button class="toggle" data-val="10代" onclick="togglePicker('pop','age',this)">10代</button>
+        <button class="toggle" data-val="20代" onclick="togglePicker('pop','age',this)">20代</button>
+        <button class="toggle" data-val="30代" onclick="togglePicker('pop','age',this)">30代</button>
+        <button class="toggle" data-val="40代" onclick="togglePicker('pop','age',this)">40代</button>
+        <button class="toggle" data-val="50代" onclick="togglePicker('pop','age',this)">50代</button>
+        <button class="toggle" data-val="60代" onclick="togglePicker('pop','age',this)">60代</button>
+      </div>
+    </div>
+  </div>
+  <div class="result-box" style="margin-bottom:20px;">
+    <div class="result-main">
+      <div class="result-label">対象人口</div>
+      <div class="result-value" id="pop_total_num">—</div>
+      <div class="result-unit">人</div>
+    </div>
+    <div class="result-subs" id="pop_breakdown"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">内訳</div>
+    <div id="pop_table" class="pop-grid"></div>
+  </div>
+</div>
+
+</div><!-- /.main -->
 
 <script>
-// 初期状態で現在の年月を設定
-const now = new Date();
-const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-document.getElementById('targetMonth').value = currentYm;
+const popData = [
+  {station:'阿佐ヶ谷',age:'10代以下',gender:'女性',pop:1200},
+  {station:'阿佐ヶ谷',age:'10代以下',gender:'男性',pop:1100},
+  {station:'阿佐ヶ谷',age:'10代',gender:'女性',pop:2600},
+  {station:'阿佐ヶ谷',age:'10代',gender:'男性',pop:2400},
+  {station:'阿佐ヶ谷',age:'20代',gender:'女性',pop:2000},
+  {station:'阿佐ヶ谷',age:'20代',gender:'男性',pop:1800},
+  {station:'阿佐ヶ谷',age:'30代',gender:'女性',pop:2200},
+  {station:'阿佐ヶ谷',age:'30代',gender:'男性',pop:2100},
+  {station:'阿佐ヶ谷',age:'40代',gender:'女性',pop:2300},
+  {station:'阿佐ヶ谷',age:'40代',gender:'男性',pop:2200},
+  {station:'阿佐ヶ谷',age:'50代',gender:'女性',pop:2000},
+  {station:'阿佐ヶ谷',age:'50代',gender:'男性',pop:1900},
+  {station:'阿佐ヶ谷',age:'60代',gender:'女性',pop:1500},
+  {station:'阿佐ヶ谷',age:'60代',gender:'男性',pop:1400},
+  {station:'高円寺',age:'10代以下',gender:'女性',pop:1000},
+  {station:'高円寺',age:'10代以下',gender:'男性',pop:900},
+  {station:'高円寺',age:'10代',gender:'女性',pop:2200},
+  {station:'高円寺',age:'10代',gender:'男性',pop:2100},
+  {station:'高円寺',age:'20代',gender:'女性',pop:2800},
+  {station:'高円寺',age:'20代',gender:'男性',pop:2700},
+  {station:'高円寺',age:'30代',gender:'女性',pop:2500},
+  {station:'高円寺',age:'30代',gender:'男性',pop:2400},
+  {station:'高円寺',age:'40代',gender:'女性',pop:2400},
+  {station:'高円寺',age:'40代',gender:'男性',pop:2300},
+  {station:'高円寺',age:'50代',gender:'女性',pop:1900},
+  {station:'高円寺',age:'50代',gender:'男性',pop:1800},
+  {station:'高円寺',age:'60代',gender:'女性',pop:1300},
+  {station:'高円寺',age:'60代',gender:'男性',pop:1200},
+  {station:'荻窪',age:'10代以下',gender:'女性',pop:1800},
+  {station:'荻窪',age:'10代以下',gender:'男性',pop:1700},
+  {station:'荻窪',age:'10代',gender:'女性',pop:3500},
+  {station:'荻窪',age:'10代',gender:'男性',pop:3300},
+  {station:'荻窪',age:'20代',gender:'女性',pop:2400},
+  {station:'荻窪',age:'20代',gender:'男性',pop:2200},
+  {station:'荻窪',age:'30代',gender:'女性',pop:3100},
+  {station:'荻窪',age:'30代',gender:'男性',pop:2900},
+  {station:'荻窪',age:'40代',gender:'女性',pop:3300},
+  {station:'荻窪',age:'40代',gender:'男性',pop:3100},
+  {station:'荻窪',age:'50代',gender:'女性',pop:2800},
+  {station:'荻窪',age:'50代',gender:'男性',pop:2600},
+  {station:'荻窪',age:'60代',gender:'女性',pop:2100},
+  {station:'荻窪',age:'60代',gender:'男性',pop:1900},
+  {station:'中野',age:'10代以下',gender:'女性',pop:2200},
+  {station:'中野',age:'10代以下',gender:'男性',pop:2100},
+  {station:'中野',age:'10代',gender:'女性',pop:5000},
+  {station:'中野',age:'10代',gender:'男性',pop:4800},
+  {station:'中野',age:'20代',gender:'女性',pop:6200},
+  {station:'中野',age:'20代',gender:'男性',pop:6000},
+  {station:'中野',age:'30代',gender:'女性',pop:5500},
+  {station:'中野',age:'30代',gender:'男性',pop:5300},
+  {station:'中野',age:'40代',gender:'女性',pop:5100},
+  {station:'中野',age:'40代',gender:'男性',pop:4900},
+  {station:'中野',age:'50代',gender:'女性',pop:4400},
+  {station:'中野',age:'50代',gender:'男性',pop:4200},
+  {station:'中野',age:'60代',gender:'女性',pop:3500},
+  {station:'中野',age:'60代',gender:'男性',pop:3200},
+  {station:'吉祥寺',age:'10代以下',gender:'女性',pop:2000},
+  {station:'吉祥寺',age:'10代以下',gender:'男性',pop:1900},
+  {station:'吉祥寺',age:'10代',gender:'女性',pop:4000},
+  {station:'吉祥寺',age:'10代',gender:'男性',pop:3800},
+  {station:'吉祥寺',age:'20代',gender:'女性',pop:4200},
+  {station:'吉祥寺',age:'20代',gender:'男性',pop:3900},
+  {station:'吉祥寺',age:'30代',gender:'女性',pop:4500},
+  {station:'吉祥寺',age:'30代',gender:'男性',pop:4100},
+  {station:'吉祥寺',age:'40代',gender:'女性',pop:4600},
+  {station:'吉祥寺',age:'40代',gender:'男性',pop:4200},
+  {station:'吉祥寺',age:'50代',gender:'女性',pop:3900},
+  {station:'吉祥寺',age:'50代',gender:'男性',pop:3600},
+  {station:'吉祥寺',age:'60代',gender:'女性',pop:2900},
+  {station:'吉祥寺',age:'60代',gender:'男性',pop:2600},
+  {station:'西荻窪',age:'10代以下',gender:'女性',pop:791},
+  {station:'西荻窪',age:'10代以下',gender:'男性',pop:762},
+  {station:'西荻窪',age:'10代',gender:'女性',pop:951},
+  {station:'西荻窪',age:'10代',gender:'男性',pop:938},
+  {station:'西荻窪',age:'20代',gender:'女性',pop:2308},
+  {station:'西荻窪',age:'20代',gender:'男性',pop:2007},
+  {station:'西荻窪',age:'30代',gender:'女性',pop:2277},
+  {station:'西荻窪',age:'30代',gender:'男性',pop:2017},
+  {station:'西荻窪',age:'40代',gender:'女性',pop:2458},
+  {station:'西荻窪',age:'40代',gender:'男性',pop:2124},
+  {station:'西荻窪',age:'50代',gender:'女性',pop:2684},
+  {station:'西荻窪',age:'50代',gender:'男性',pop:2194},
+  {station:'西荻窪',age:'60代',gender:'女性',pop:1707},
+  {station:'西荻窪',age:'60代',gender:'男性',pop:1625},
+];
 
-function showTab(id,btn){
-  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
-  document.getElementById('tab-'+id).classList.add('active');
+// ── Tab switching ──
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'pop') renderPop();
 }
 
-function fmt(n){return Math.round(n).toLocaleString('ja-JP');}
-function val(id){return parseFloat(document.getElementById(id).value)||0;}
-
-function calculate(){
-  const revenue=val('revenue'),customers=val('customers'),hours=val('hours'),
-        days=val('days'),staff=val('staff'),wage=val('wage'),
-        fixed=val('fixed'),costRate=val('costRate'),
-        targetMonth=document.getElementById('targetMonth').value;
-
-  if(!revenue||!hours||!days){alert('売上・営業時間・営業日数は必須です');return;}
-
-  let unitPrice=val('unitPrice');
-  if(!unitPrice&&customers>0){
-    unitPrice=revenue/customers;
-    document.getElementById('unitPrice').value=Math.round(unitPrice);
-  }
-
-  const totalHours=hours*days;
-  const laborCost=staff*wage*totalHours;
-  const cogs=revenue*(costRate/100);
-  const fl=laborCost+cogs;
-  const flRatio=(fl/revenue)*100;
-  const varRate=(costRate/100)+(laborCost/revenue);
-  const breakEven=varRate<1?fixed/(1-varRate):Infinity;
-  const profit=revenue-fl-fixed;
-  const laborPerHour=staff>0?revenue/(staff*totalHours):0;
-  const dailySales=days>0?revenue/days:0;
-  const marginRate=(profit/revenue)*100;
-
-  const flClass=flRatio<55?'good':flRatio<65?'warn':'bad';
-  const profitClass=profit>0?'good':'bad';
-
-  document.getElementById('result-content').innerHTML=`
-    <div class="result-grid">
-      <div class="metric"><p class="metric-label">FL比率</p><p class="metric-value ${flClass}">${flRatio.toFixed(1)}%</p><p class="metric-sub">目安: 55〜65%</p></div>
-      <div class="metric"><p class="metric-label">営業利益</p><p class="metric-value ${profitClass}">${fmt(profit)}円</p><p class="metric-sub">利益率 ${marginRate.toFixed(1)}%</p></div>
-      <div class="metric"><p class="metric-label">損益分岐点</p><p class="metric-value">${breakEven===Infinity?'—':fmt(breakEven)+'円'}</p><p class="metric-sub">最低必要売上</p></div>
-      <div class="metric"><p class="metric-label">人時売上高</p><p class="metric-value">${staff>0?fmt(laborPerHour)+'円':'—'}</p><p class="metric-sub">1人1時間あたり</p></div>
-      <div class="metric"><p class="metric-label">客単価</p><p class="metric-value">${unitPrice>0?fmt(unitPrice)+'円':'—'}</p><p class="metric-sub">${customers>0?'月'+fmt(customers)+'人来店':'客数を入力してください'}</p></div>
-      <div class="metric"><p class="metric-label">日次売上</p><p class="metric-value">${fmt(dailySales)}円</p><p class="metric-sub">1日平均</p></div>
-    </div>`;
-
-  const issues=[];
-  if(flRatio>65) issues.push({l:'high',t:'FL比率が高すぎます',s:`現在 ${flRatio.toFixed(1)}% — 65%以下を目指してください。人件費か原価に問題がある可能性があります。`});
-  else if(flRatio>55) issues.push({l:'mid',t:'FL比率がやや高めです',s:`現在 ${flRatio.toFixed(1)}% — 許容範囲ですが改善余地あり。`});
-  else issues.push({l:'low',t:'FL比率は健全です',s:`現在 ${flRatio.toFixed(1)}% — 良好な水準です。`});
-
-  if(profit<0) issues.push({l:'high',t:'赤字です',s:`月 ${fmt(Math.abs(profit))}円の損失。${breakEven!==Infinity?'損益分岐点まで '+fmt(breakEven-revenue)+'円の売上アップが必要です。':''}`});
-  else if(marginRate<5) issues.push({l:'mid',t:'利益率が低水準です',s:`利益率 ${marginRate.toFixed(1)}% — 固定費の見直しか売上増加が有効です。`});
-  else issues.push({l:'low',t:'黒字経営です',s:`利益率 ${marginRate.toFixed(1)}% — 現状維持しながらさらなる改善を目指しましょう。`});
-
-  if(staff>0){
-    if(laborPerHour<3000) issues.push({l:'high',t:'人時売上高が低いです',s:`${fmt(laborPerHour)}円/人時 — スタッフ配置・シフト設計の見直しを検討してください。`});
-    else if(laborPerHour<5000) issues.push({l:'mid',t:'人時売上高に改善余地があります',s:`${fmt(laborPerHour)}円/人時 — ピーク時間帯への集中配置が効果的です。`});
-    else issues.push({l:'low',t:'人時売上高は良好です',s:`${fmt(laborPerHour)}円/人時 — 効率的なスタッフ配置ができています。`});
-  }
-
-  if(breakEven!==Infinity&&revenue<breakEven)
-    issues.push({l:'high',t:'売上が損益分岐点を下回っています',s:`あと ${fmt(breakEven-revenue)}円 / 月の売上が必要です。客単価アップかリピート率改善を優先してください。`});
-
-  if(unitPrice>0&&unitPrice<1000)
-    issues.push({l:'mid',t:'客単価が低めです',s:`現在 ${fmt(unitPrice)}円 — セット販売やアップセル施策で単価向上を検討してください。`});
-
-  document.getElementById('bottleneck-list').innerHTML=issues.map(i=>`
-    <li class="bottleneck-item">
-      <span class="bn-tag ${i.l}">${i.l==='high'?'要改善':i.l==='mid'?'注意':'良好'}</span>
-      <div><p class="bn-text">${i.t}</p><p class="bn-sub">${i.s}</p></div>
-    </li>`).join('');
-
-  document.getElementById('bottleneck-panel').style.display='block';
-  document.getElementById('copy-btn').style.display='inline-block';
-  window._last={revenue,customers,unitPrice,profit,flRatio,breakEven,laborPerHour,marginRate};
-
-  // 【追加機能】月次グラフタブの入力エリアへ自動反映
-  syncToGraphTab(targetMonth, revenue, fixed, fl);
+// ── Formatters ──
+function fmtYen(val) {
+  if (val >= 1e8) return (val/1e8).toFixed(2) + '億円';
+  if (val >= 1e4) return (val/1e4).toFixed(0) + '万円';
+  return val.toLocaleString() + '円';
 }
 
-function syncToGraphTab(month, revenue, fixed, fl) {
-  if (!month) return;
-  const entriesContainer = document.getElementById('month-entries');
-  const entries = entriesContainer.querySelectorAll('.month-entry');
-  let exists = false;
-
-  // すでに同じ月が存在するかチェックし、あれば更新
-  entries.forEach(e => {
-    const inputs = e.querySelectorAll('input');
-    if (inputs[0].value === month) {
-      inputs[1].value = Math.round(revenue);
-      inputs[2].value = Math.round(fixed);
-      inputs[3].value = Math.round(fl);
-      exists = true;
+// ── Animated counter ──
+function animateTo(el, newVal) {
+  const current = parseFloat(el.dataset.val || '0');
+  const diff = newVal - current;
+  const steps = 20; let step = 0;
+  clearInterval(el._timer);
+  el._timer = setInterval(() => {
+    step++;
+    const v = current + diff * (step / steps);
+    el.textContent = v.toLocaleString('ja-JP', {maximumFractionDigits:1});
+    if (step >= steps) {
+      el.textContent = newVal.toLocaleString('ja-JP', {maximumFractionDigits:1});
+      el.dataset.val = newVal;
+      clearInterval(el._timer);
     }
-  });
-
-  // 存在しなければ新しく行を追加して値をセット
-  if (!exists) {
-    addMonthRowWithValue(month, Math.round(revenue), Math.round(fixed), Math.round(fl));
-  }
-
-  // 自動的にバックグラウンドでグラフも再描画
-  drawChart(true);
+  }, 16);
 }
 
-function addMonthRowWithValue(month, revenue, fixed, fl) {
-  const div = document.createElement('div');
-  div.className = 'month-entry';
-  div.innerHTML = `
-    <div class="field"><label>対象月</label><input type="month" value="${month}" /></div>
-    <div class="field"><label>売上（円）</label><input type="number" value="${revenue}" placeholder="1000000" /></div>
-    <div class="field"><label>固定費（円）</label><input type="number" value="${fixed}" placeholder="300000" /></div>
-    <div class="field"><label>FL合計（円）</label><input type="number" value="${fl}" placeholder="550000" /></div>
-    <button class="del-btn" onclick="this.parentElement.remove()" title="削除">✕</button>`;
-  document.getElementById('month-entries').appendChild(div);
+// ── Shared: get filtered pop count for a prefix ──
+function getFilteredPop(prefix) {
+  const station = document.getElementById(prefix + '_station').value;
+  const genderBtn = document.querySelector('#' + prefix + '_gender_group .toggle.active');
+  const gender = genderBtn ? genderBtn.dataset.val : 'all';
+  const ageAllActive = document.querySelector('#' + prefix + '_age_group .toggle[data-val="all"]').classList.contains('active');
+  const selectedAges = ageAllActive
+    ? null
+    : [...document.querySelectorAll('#' + prefix + '_age_group .toggle.active')].map(b => b.dataset.val);
+
+  return popData.filter(d =>
+    (!station || station === 'all' || d.station === station) &&
+    (gender === 'all' || d.gender === gender) &&
+    (ageAllActive || selectedAges.includes(d.age))
+  ).reduce((s, d) => s + d.pop, 0);
 }
 
-function copyResult(){
-  const r=window._last;if(!r)return;
-  const lines=['【店舗ボトルネック診断結果】',
-    `売上: ${fmt(r.revenue)}円`,
-    r.customers?`客数: ${fmt(r.customers)}人 / 客単価: ${fmt(r.unitPrice)}円`:'',
-    `FL比率: ${r.flRatio.toFixed(1)}%`,
-    `営業利益: ${fmt(r.profit)}円（利益率 ${r.marginRate.toFixed(1)}%）`,
-    r.breakEven!==Infinity?`損益分岐点: ${fmt(r.breakEven)}円`:'',
-    r.laborPerHour?`人時売上高: ${fmt(r.laborPerHour)}円`:'',
-  ].filter(Boolean);
-  navigator.clipboard.writeText(lines.join('\n')).then(()=>{
-    const b=document.getElementById('copy-btn');
-    b.textContent='✅ コピーしました';
-    setTimeout(()=>{b.textContent='📋 結果をコピー';},2000);
-  });
-}
+// ── Toggle button handler ──
+function togglePicker(prefix, type, btn) {
+  const groupId = '#' + prefix + '_' + type + '_group';
+  const allBtn = document.querySelector(groupId + ' .toggle[data-val="all"]');
 
-let chartInstance=null,monthCount=0;
-function addMonth(){
-  monthCount++;
-  const now=new Date();
-  const m=String(now.getMonth()+2-monthCount).padStart(2,'0');
-  const yr=now.getFullYear();
-  addMonthRowWithValue(`${yr}-${m}`, "", "", "");
-}
-
-function drawChart(isSilent = false){
-  const entries=document.querySelectorAll('.month-entry');
-  if(!entries.length){
-    if(!isSilent) alert('月のデータを追加してください');
-    return;
-  }
-  
-  const dataList = [];
-  entries.forEach(e=>{
-    const inp=e.querySelectorAll('input');
-    const m = inp[0].value || '?';
-    const rev=parseFloat(inp[1].value)||0;
-    const fix=parseFloat(inp[2].value)||0;
-    const fl=parseFloat(inp[3].value)||0;
-    if (inp[1].value || inp[2].value || inp[3].value) {
-      dataList.push({ m, rev, prof: (rev - fl - fix) });
+  if (type === 'gender') {
+    // single select
+    document.querySelectorAll(groupId + ' .toggle').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  } else {
+    // age: multi select
+    if (btn.dataset.val === 'all') {
+      document.querySelectorAll(groupId + ' .toggle').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    } else {
+      allBtn.classList.remove('active');
+      btn.classList.toggle('active');
+      const anyActive = [...document.querySelectorAll(groupId + ' .toggle')].some(b => b.classList.contains('active'));
+      if (!anyActive) allBtn.classList.add('active');
     }
-  });
-
-  // 月順にソートして並び順を整える
-  dataList.sort((a, b) => a.m.localeCaseInsensitiveCompare ? a.m.localeCaseInsensitiveCompare(b.m) : a.m.localeCompare(b.m));
-
-  if (dataList.length === 0) return;
-
-  const labels = dataList.map(d => d.m);
-  const revenues = dataList.map(d => d.rev);
-  const profits = dataList.map(d => d.prof);
-
-  document.getElementById('chart-panel').style.display='block';
-  if(chartInstance)chartInstance.destroy();
-  const ctx=document.getElementById('trendChart').getContext('2d');
-  chartInstance=new Chart(ctx,{
-    type:'bar',
-    data:{labels,datasets:[
-      {label:'売上',data:revenues,backgroundColor:'rgba(94,255,184,0.15)',borderColor:'#5effb8',borderWidth:2,borderRadius:4,order:2},
-      {label:'営業利益',data:profits,type:'line',borderColor:'#ffd97d',backgroundColor:'rgba(255,217,125,0.1)',borderWidth:2,pointRadius:5,pointBackgroundColor:'#ffd97d',tension:.3,fill:true,order:1}
-    ]},
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{labels:{color:'#94a1c1',font:{family:'Space Grotesk',size:12}}},
-        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${Math.round(c.parsed.y).toLocaleString('ja-JP')}円`}}},
-      scales:{
-        x:{ticks:{color:'#94a1c1'},grid:{color:'#2a3050'}},
-        y:{ticks:{color:'#94a1c1',callback:v=>(v/10000).toFixed(0)+'万円'},grid:{color:'#2a3050'}}
-      }
-    }
-  });
+  }
+  applyPopPicker(prefix);
 }
 
-// 初期データのダミー生成を抑止し、スマートな運用ができるように変更
+// ── Apply pop to badge (and input for detail tab) ──
+function applyPopPicker(prefix) {
+  const total = getFilteredPop(prefix);
+  const badge = document.getElementById(prefix + '_pop_badge');
+  if (badge) badge.textContent = total.toLocaleString() + ' 人';
+
+  if (prefix === 'd') {
+    document.getElementById('d_pop').value = total;
+    calcDetail();
+  }
+  if (prefix === 'pop') renderPop();
+}
+
+// ── Calc: Basic ──
+function calcBasic() {
+  const pop = +document.getElementById('b_pop').value || 0;
+  const freq = +document.getElementById('b_freq').value || 0;
+  const price = +document.getElementById('b_price').value || 0;
+  const share = +document.getElementById('b_share').value || 0;
+  const market = pop * freq * price;
+  const annual = market * (share / 100);
+  animateTo(document.getElementById('b_market'), market / 1e4);
+  document.getElementById('b_annual').textContent = fmtYen(annual);
+  document.getElementById('b_monthly').textContent = fmtYen(annual / 12);
+}
+
+// ── Calc: Detail ──
+function calcDetail() {
+  const pop = +document.getElementById('d_pop').value || 0;
+  const rate = +document.getElementById('d_rate').value || 0;
+  const freq = +document.getElementById('d_freq').value || 0;
+  const price = +document.getElementById('d_price').value || 0;
+  const adj = +document.getElementById('d_adj').value || 0;
+  const ind = +document.getElementById('d_ind').value || 0;
+  const chain = +document.getElementById('d_chain').value || 0;
+  const newchain = +document.getElementById('d_newchain').value || 0;
+  const base = pop * (rate/100) * freq * price;
+  const result = base * (adj/100);
+  animateTo(document.getElementById('d_result'), result / 1e8);
+  document.getElementById('d_base').textContent = fmtYen(base);
+  document.getElementById('d_stores').textContent = (ind + chain + newchain) + '店';
+}
+
+// ── Calc: Store ──
+function calcStore() {
+  const shops = +document.getElementById('s_shops').value || 0;
+  const seats = +document.getElementById('s_seats').value || 0;
+  const turns = +document.getElementById('s_turns').value || 0;
+  const price = +document.getElementById('s_price').value || 0;
+  const covid = +document.getElementById('s_covid').value || 0;
+  const econ = +document.getElementById('s_econ').value || 0;
+  const daily = shops * seats * turns * price;
+  const yearly = daily * 365;
+  const result = yearly * (1 + covid/100) * (1 + econ/100);
+  animateTo(document.getElementById('s_result'), result / 1e8);
+  document.getElementById('s_base').textContent = fmtYen(yearly);
+  document.getElementById('s_daily').textContent = fmtYen(daily);
+}
+
+// ── Render pop tab ──
+function renderPop() {
+  const station = document.getElementById('pop_station').value;
+  const genderBtn = document.querySelector('#pop_gender_group .toggle.active');
+  const gender = genderBtn ? genderBtn.dataset.val : 'all';
+  const ageAllActive = document.querySelector('#pop_age_group .toggle[data-val="all"]').classList.contains('active');
+  const selectedAges = ageAllActive ? null : [...document.querySelectorAll('#pop_age_group .toggle.active')].map(b => b.dataset.val);
+
+  const filtered = popData.filter(d =>
+    (station === 'all' || d.station === station) &&
+    (gender === 'all' || d.gender === gender) &&
+    (ageAllActive || selectedAges.includes(d.age))
+  );
+  const total = filtered.reduce((s, d) => s + d.pop, 0);
+  animateTo(document.getElementById('pop_total_num'), total);
+
+  const breakdown = document.getElementById('pop_breakdown');
+  if (gender === 'all') {
+    const f = filtered.filter(d => d.gender === '女性').reduce((s,d)=>s+d.pop,0);
+    const m = filtered.filter(d => d.gender === '男性').reduce((s,d)=>s+d.pop,0);
+    breakdown.innerHTML = `<div class="sub-item"><div class="sub-label">女性</div><div class="sub-value">${f.toLocaleString()} 人</div></div><div class="sub-item"><div class="sub-label">男性</div><div class="sub-value">${m.toLocaleString()} 人</div></div>`;
+  } else { breakdown.innerHTML = ''; }
+
+  const container = document.getElementById('pop_table');
+  container.innerHTML = filtered.length === 0
+    ? '<p style="color:var(--muted);font-size:13px;">該当データがありません</p>'
+    : filtered.map(d => `<div class="pop-cell"><div class="pop-key">${d.station} ${d.age} ${d.gender}</div><div class="pop-val">${d.pop.toLocaleString()} 人</div></div>`).join('');
+}
+
+// ── Init ──
+calcBasic();
+calcDetail();
+calcStore();
+applyPopPicker('d');
+applyPopPicker('s');
 </script>
 </body>
 </html>
