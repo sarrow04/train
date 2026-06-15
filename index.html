@@ -235,6 +235,20 @@
       <div class="sub-item"><div class="sub-label">総店舗数</div><div class="sub-value" id="d_stores">—</div></div>
     </div>
   </div>
+
+  <!-- グラフ -->
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:20px;">
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-title">全人口 vs ターゲット人口</div>
+      <canvas id="chart_pop_ratio" height="180"></canvas>
+      <div id="chart_pop_legend" style="margin-top:10px; display:flex; gap:14px; justify-content:center; flex-wrap:wrap;"></div>
+    </div>
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-title">店舗構成（個人 vs チェーン）</div>
+      <canvas id="chart_stores" height="180"></canvas>
+      <div id="chart_stores_legend" style="margin-top:10px; display:flex; gap:14px; justify-content:center; flex-wrap:wrap;"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ═══ TAB 3: 店舗ベース推定 ═══ -->
@@ -548,7 +562,7 @@ function applyPopPicker(prefix) {
 
   if (prefix === 'd') {
     document.getElementById('d_pop').value = total;
-    calcDetail();
+    calcDetail(); // calcDetail already calls updateCharts
   }
   if (prefix === 'pop') renderPop();
 }
@@ -581,6 +595,7 @@ function calcDetail() {
   animateTo(document.getElementById('d_result'), result / 1e8);
   document.getElementById('d_base').textContent = fmtYen(base);
   document.getElementById('d_stores').textContent = (ind + chain + newchain) + '店';
+  if (typeof updateCharts === 'function') updateCharts();
 }
 
 // ── Calc: Store ──
@@ -628,12 +643,143 @@ function renderPop() {
     : filtered.map(d => `<div class="pop-cell"><div class="pop-key">${d.station} ${d.age} ${d.gender}</div><div class="pop-val">${d.pop.toLocaleString()} 人</div></div>`).join('');
 }
 
+// ── Draw donut chart ──
+function drawDonut(canvasId, segments, legendId) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 300;
+  canvas.width = W;
+  canvas.height = 180;
+  const cx = W / 2, cy = 82, r = 68, inner = 38;
+  const total = segments.reduce((s, x) => s + x.value, 0);
+  if (total === 0) return;
+  let angle = -Math.PI / 2;
+  ctx.clearRect(0, 0, W, 180);
+  segments.forEach(seg => {
+    const sweep = (seg.value / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, angle, angle + sweep);
+    ctx.closePath();
+    ctx.fillStyle = seg.color;
+    ctx.fill();
+    angle += sweep;
+  });
+  // inner hole
+  ctx.beginPath();
+  ctx.arc(cx, cy, inner, 0, Math.PI * 2);
+  ctx.fillStyle = '#111827';
+  ctx.fill();
+  // center text
+  ctx.fillStyle = '#E2E8F0';
+  ctx.font = 'bold 13px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(total.toLocaleString(), cx, cy - 7);
+  ctx.font = '10px Inter, sans-serif';
+  ctx.fillStyle = '#64748B';
+  ctx.fillText('合計', cx, cy + 9);
+  // legend
+  const legendEl = document.getElementById(legendId);
+  if (legendEl) {
+    legendEl.innerHTML = segments.map(seg =>
+      `<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:#94A3B8;">
+        <span style="width:10px;height:10px;border-radius:3px;background:${seg.color};display:inline-block;"></span>
+        ${seg.label}: <strong style="color:#E2E8F0;">${seg.value.toLocaleString()}</strong>
+      </span>`
+    ).join('');
+  }
+}
+
+// ── Draw bar chart ──
+function drawBar(canvasId, bars, legendId) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 300;
+  canvas.width = W;
+  canvas.height = 180;
+  ctx.clearRect(0, 0, W, 180);
+  const max = Math.max(...bars.map(b => b.value), 1);
+  const padL = 28, padR = 16, padT = 16, padB = 36;
+  const chartW = W - padL - padR;
+  const chartH = 180 - padT - padB;
+  const barW = Math.min(60, chartW / bars.length - 12);
+  const gap = (chartW - barW * bars.length) / (bars.length + 1);
+
+  // grid lines
+  ctx.strokeStyle = '#1E3A5F';
+  ctx.lineWidth = 1;
+  [0, 0.25, 0.5, 0.75, 1].forEach(t => {
+    const y = padT + chartH * (1 - t);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    if (t > 0) {
+      ctx.fillStyle = '#64748B'; ctx.font = '9px Inter,sans-serif'; ctx.textAlign = 'right';
+      ctx.fillText(Math.round(max * t), padL - 3, y + 4);
+    }
+  });
+
+  bars.forEach((bar, i) => {
+    const x = padL + gap * (i + 1) + barW * i;
+    const barH = (bar.value / max) * chartH;
+    const y = padT + chartH - barH;
+    // bar
+    ctx.fillStyle = bar.color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW, barH, [4, 4, 0, 0]);
+    ctx.fill();
+    // value on top
+    ctx.fillStyle = '#E2E8F0'; ctx.font = 'bold 11px JetBrains Mono,monospace'; ctx.textAlign = 'center';
+    ctx.fillText(bar.value, x + barW / 2, y - 5);
+    // label below
+    ctx.fillStyle = '#94A3B8'; ctx.font = '10px Inter,sans-serif';
+    ctx.fillText(bar.label, x + barW / 2, padT + chartH + 16);
+  });
+
+  // legend
+  const legendEl = document.getElementById(legendId);
+  if (legendEl) {
+    legendEl.innerHTML = bars.map(b =>
+      `<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:#94A3B8;">
+        <span style="width:10px;height:10px;border-radius:3px;background:${b.color};display:inline-block;"></span>
+        ${b.label}: <strong style="color:#E2E8F0;">${b.value}</strong>店
+      </span>`
+    ).join('');
+  }
+}
+
+function updateCharts() {
+  // 1) 人口比率ドーナツ
+  const station = document.getElementById('d_station').value;
+  const totalPop = station
+    ? popData.filter(d => d.station === station).reduce((s,d) => s+d.pop, 0)
+    : popData.reduce((s,d) => s+d.pop, 0);
+  const targetPop = +document.getElementById('d_pop').value || 0;
+  const otherPop = Math.max(0, totalPop - targetPop);
+  drawDonut('chart_pop_ratio', [
+    { label: 'ターゲット', value: targetPop, color: '#3B82F6' },
+    { label: 'その他', value: otherPop, color: '#1E3A5F' },
+  ], 'chart_pop_legend');
+
+  // 2) 店舗構成バー
+  const ind = +document.getElementById('d_ind').value || 0;
+  const chain = +document.getElementById('d_chain').value || 0;
+  const newchain = +document.getElementById('d_newchain').value || 0;
+  drawBar('chart_stores', [
+    { label: '個人店', value: ind, color: '#10B981' },
+    { label: 'チェーン', value: chain, color: '#3B82F6' },
+    { label: '新規チェーン', value: newchain, color: '#F59E0B' },
+  ], 'chart_stores_legend');
+}
+
 // ── Init ──
 calcBasic();
 calcDetail();
 calcStore();
 applyPopPicker('d');
 applyPopPicker('s');
+setTimeout(updateCharts, 50);
 </script>
 </body>
 </html>
