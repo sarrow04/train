@@ -87,6 +87,17 @@
   .rank-name { font-size: 13px; font-weight: 600; color: var(--text); }
   .rank-val { font-family: var(--mono); font-size: 15px; color: var(--green); margin-top: 2px; }
 
+
+  /* Sensitivity */
+  .sens-row { display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+  .sens-label { font-size:11px; color:var(--label); min-width:120px; }
+  .sens-slider { flex:1; min-width:140px; accent-color:var(--blue); cursor:pointer; }
+  .sens-range { font-size:10px; color:var(--muted); min-width:36px; text-align:right; }
+  .sens-delta { font-family:var(--mono); font-size:12px; font-weight:600; min-width:80px; text-align:right; }
+  .sens-delta.up { color:var(--green); }
+  .sens-delta.down { color:#ef4444; }
+  .sens-delta.flat { color:var(--muted); }
+
 </style>
 </head>
 <body>
@@ -267,6 +278,18 @@
       <canvas id="chart_stores" height="180"></canvas>
       <div id="chart_stores_legend" style="margin-top:10px; display:flex; gap:14px; justify-content:center; flex-wrap:wrap;"></div>
     </div>
+  </div>
+
+  <!-- 感度分析 -->
+  <div class="card" style="margin-top:20px;" id="sensitivity_card">
+    <div class="card-title">感度分析 <span style="font-size:11px;color:var(--muted);font-weight:400;">各パラメータを変化させたときの売上インパクト</span></div>
+
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">ベース推計結果：<span id="sens_base_label" style="color:var(--blue-light);font-family:var(--mono);font-weight:600;">—</span> 億円</div>
+      <canvas id="sens_bar" height="200"></canvas>
+    </div>
+
+    <div id="sens_sliders"></div>
   </div>
 </div>
 
@@ -726,6 +749,7 @@ function calcDetail() {
   document.getElementById('d_base').textContent = fmtYen(base);
   document.getElementById('d_stores').textContent = (ind + chain + newchain) + '店';
   if (typeof updateCharts === 'function') updateCharts();
+  if (typeof updateSensitivity === 'function') updateSensitivity();
 }
 
 // ── Calc: Store ──
@@ -912,6 +936,142 @@ function updateCharts() {
 }
 
 
+
+// ── Sensitivity analysis ──
+const SENS_PARAMS = [
+  { id:'d_rate',  label:'利用率',     unit:'%',  step:1,  range:20, fmt: v => v.toFixed(0)+'%' },
+  { id:'d_freq',  label:'年間利用回数', unit:'回', step:1,  range:10, fmt: v => v.toFixed(0)+'回' },
+  { id:'d_price', label:'平均客単価',  unit:'円', step:100,range:0.2, fmt: v => '¥'+v.toLocaleString() },
+  { id:'d_adj',   label:'稼働率補正',  unit:'%',  step:1,  range:15, fmt: v => v.toFixed(0)+'%' },
+];
+
+function calcResultFromValues(pop, rate, freq, price, adj) {
+  return pop * (rate/100) * freq * price * (adj/100);
+}
+
+function buildSensSliders() {
+  const container = document.getElementById('sens_sliders');
+  if (!container) return;
+  container.innerHTML = SENS_PARAMS.map(p => {
+    const base = +document.getElementById(p.id).value || 0;
+    const isPercent = p.range <= 1 ? false : false; // range is absolute for % params
+    return `<div class="sens-row" id="sensrow_${p.id}">
+      <span class="sens-label">${p.label}</span>
+      <span class="sens-range" id="sensval_${p.id}">${p.fmt(base)}</span>
+      <input class="sens-slider" type="range" id="sensslider_${p.id}"
+        min="${Math.max(0, base - p.range * (p.unit==='円' ? base : 1))}"
+        max="${base + p.range * (p.unit==='円' ? base : 1)}"
+        step="${p.step}" value="${base}"
+        oninput="onSensSlider('${p.id}')">
+      <span class="sens-delta flat" id="sensdelta_${p.id}">±0億</span>
+    </div>`;
+  }).join('');
+}
+
+function onSensSlider(paramId) {
+  const pop   = +document.getElementById('d_pop').value   || 0;
+  const rate  = +document.getElementById('d_rate').value  || 0;
+  const freq  = +document.getElementById('d_freq').value  || 0;
+  const price = +document.getElementById('d_price').value || 0;
+  const adj   = +document.getElementById('d_adj').value   || 0;
+  const baseResult = calcResultFromValues(pop, rate, freq, price, adj);
+
+  const slider = document.getElementById('sensslider_' + paramId);
+  const newVal = +slider.value;
+  const param = SENS_PARAMS.find(p => p.id === paramId);
+
+  // calc new result with this param changed
+  const vals = { d_rate: rate, d_freq: freq, d_price: price, d_adj: adj };
+  vals[paramId] = newVal;
+  const newResult = calcResultFromValues(pop, vals.d_rate, vals.d_freq, vals.d_price, vals.d_adj);
+  const delta = newResult - baseResult;
+
+  const valEl = document.getElementById('sensval_' + paramId);
+  const deltaEl = document.getElementById('sensdelta_' + paramId);
+  if (valEl) valEl.textContent = param.fmt(newVal);
+  if (deltaEl) {
+    const sign = delta > 0 ? '+' : '';
+    deltaEl.textContent = sign + (delta/1e8).toFixed(2) + '億';
+    deltaEl.className = 'sens-delta ' + (delta > 0.001 ? 'up' : delta < -0.001 ? 'down' : 'flat');
+  }
+  drawSensChart();
+}
+
+function drawSensChart() {
+  const canvas = document.getElementById('sens_bar');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.parentElement.offsetWidth || 600;
+  const H = 200;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  const pop   = +document.getElementById('d_pop').value   || 0;
+  const rate  = +document.getElementById('d_rate').value  || 0;
+  const freq  = +document.getElementById('d_freq').value  || 0;
+  const price = +document.getElementById('d_price').value || 0;
+  const adj   = +document.getElementById('d_adj').value   || 0;
+  const base  = calcResultFromValues(pop, rate, freq, price, adj);
+
+  // compute delta per param from slider values
+  const deltas = SENS_PARAMS.map(p => {
+    const slider = document.getElementById('sensslider_' + p.id);
+    const newVal = slider ? +slider.value : +document.getElementById(p.id).value;
+    const vals = { d_rate: rate, d_freq: freq, d_price: price, d_adj: adj };
+    vals[p.id] = newVal;
+    const newResult = calcResultFromValues(pop, vals.d_rate, vals.d_freq, vals.d_price, vals.d_adj);
+    return { label: p.label, delta: newResult - base };
+  });
+
+  const maxAbs = Math.max(...deltas.map(d => Math.abs(d.delta)), 1e6);
+  const padL = 90, padR = 80, padT = 16, padB = 16;
+  const chartW = W - padL - padR;
+  const barH = 28, gap = 14;
+  const midX = padL + chartW / 2;
+
+  // center line
+  ctx.strokeStyle = '#2a3a4a'; ctx.lineWidth = 1;
+  ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(midX, padT); ctx.lineTo(midX, H - padB); ctx.stroke();
+  ctx.setLineDash([]);
+
+  deltas.forEach((d, i) => {
+    const y = padT + i * (barH + gap);
+    const bw = (Math.abs(d.delta) / maxAbs) * (chartW / 2);
+    const isUp = d.delta >= 0;
+    const color = d.delta > 1000 ? '#10B981' : d.delta < -1000 ? '#ef4444' : '#3B82F6';
+
+    ctx.fillStyle = color;
+    if (isUp) {
+      ctx.beginPath(); ctx.roundRect(midX, y, bw, barH, [0,4,4,0]); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.roundRect(midX - bw, y, bw, barH, [4,0,0,4]); ctx.fill();
+    }
+
+    // label
+    ctx.fillStyle = '#94A3B8'; ctx.font = '11px Inter,sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(d.label, padL - 6, y + barH/2 + 4);
+
+    // value
+    ctx.fillStyle = color; ctx.font = 'bold 11px JetBrains Mono,monospace';
+    ctx.textAlign = isUp ? 'left' : 'right';
+    const sign = d.delta > 0 ? '+' : '';
+    ctx.fillText(sign + (d.delta/1e8).toFixed(2)+'億', isUp ? midX + bw + 6 : midX - bw - 6, y + barH/2 + 4);
+  });
+
+  // base label
+  const baseLabelEl = document.getElementById('sens_base_label');
+  if (baseLabelEl) baseLabelEl.textContent = (base/1e8).toFixed(2);
+}
+
+function updateSensitivity() {
+  buildSensSliders();
+  drawSensChart();
+}
+
 // ── Compare tab ──
 let cmpItems = [];
 const CMP_COLORS = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#06B6D4','#F97316','#84CC16'];
@@ -1031,7 +1191,7 @@ calcStore();
 applyPopPicker('d');
 applyPopPicker('s');
 applyPopPicker('cmp');
-setTimeout(updateCharts, 50);
+setTimeout(() => { updateCharts(); updateSensitivity(); }, 50);
 </script>
 </body>
 </html>
