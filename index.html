@@ -69,6 +69,24 @@
   .picker-section { margin-bottom: 14px; }
   .picker-section label { display: block; margin-bottom: 8px; }
   @media (max-width: 420px) { .result-value { font-size: 28px; } .main { padding: 20px 16px; } .card { padding: 18px; } }
+
+  /* Compare tab */
+  .add-btn { background: var(--blue); color: #fff; border: none; border-radius: 7px; padding: 9px 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+  .add-btn:hover { opacity: .85; }
+  .cmp-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .cmp-table th { text-align: left; padding: 8px 10px; font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+  .cmp-table td { padding: 10px 10px; border-bottom: 1px solid #1a2a3a; font-family: var(--mono); font-size: 12px; vertical-align: middle; }
+  .cmp-table tr:last-child td { border-bottom: none; }
+  .cmp-table tr:hover td { background: rgba(59,130,246,0.04); }
+  .cmp-num { color: var(--blue-light); font-weight: 600; }
+  .del-btn { background: none; border: 1px solid #2a3a4a; color: var(--muted); border-radius: 5px; padding: 3px 8px; font-size: 11px; cursor: pointer; transition: all .15s; }
+  .del-btn:hover { border-color: #ef4444; color: #ef4444; }
+  .rank-box { flex: 1; min-width: 160px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; display: none; }
+  .rank-box.show { display: block; }
+  .rank-num { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+  .rank-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .rank-val { font-family: var(--mono); font-size: 15px; color: var(--green); margin-top: 2px; }
+
 </style>
 </head>
 <body>
@@ -86,6 +104,7 @@
   <button class="tab" onclick="switchTab('detail',this)">詳細推定</button>
   <button class="tab" onclick="switchTab('store',this)">店舗ベース推定</button>
   <button class="tab" onclick="switchTab('pop',this)">人口データ</button>
+  <button class="tab" onclick="switchTab('compare',this)">📊 業種比較</button>
 </div>
 
 <div class="main">
@@ -389,6 +408,112 @@
   </div>
 </div>
 
+
+<!-- ═══ TAB 5: 業種比較 ═══ -->
+<div id="panel-compare" class="panel">
+  <p class="section-label">業種・お題 比較</p>
+
+  <div class="card">
+    <div class="card-title">お題を追加</div>
+    <div class="field-grid" style="margin-bottom:16px;">
+      <div class="field">
+        <label>お題（業種名）</label>
+        <input type="text" id="cmp_topic" placeholder="例：ピザ">
+      </div>
+      <div class="field">
+        <label>駅名</label>
+        <select id="cmp_station" onchange="cmpUpdatePop()">
+          <option value="阿佐ヶ谷">阿佐ヶ谷</option>
+          <option value="高円寺">高円寺</option>
+          <option value="荻窪">荻窪</option>
+          <option value="中野">中野</option>
+          <option value="吉祥寺">吉祥寺</option>
+          <option value="西荻窪">西荻窪</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="picker-section">
+      <label>性別</label>
+      <div class="toggle-group" id="cmp_gender_group">
+        <button class="toggle active" data-val="all" onclick="togglePicker('cmp','gender',this)">すべて</button>
+        <button class="toggle" data-val="女性" onclick="togglePicker('cmp','gender',this)">女性</button>
+        <button class="toggle" data-val="男性" onclick="togglePicker('cmp','gender',this)">男性</button>
+      </div>
+    </div>
+    <div class="picker-section">
+      <label>年代（複数選択可）</label>
+      <div class="toggle-group" id="cmp_age_group">
+        <button class="toggle active" data-val="all" onclick="togglePicker('cmp','age',this)">すべて</button>
+        <button class="toggle" data-val="10代以下" onclick="togglePicker('cmp','age',this)">10代以下</button>
+        <button class="toggle" data-val="10代" onclick="togglePicker('cmp','age',this)">10代</button>
+        <button class="toggle" data-val="20代" onclick="togglePicker('cmp','age',this)">20代</button>
+        <button class="toggle" data-val="30代" onclick="togglePicker('cmp','age',this)">30代</button>
+        <button class="toggle" data-val="40代" onclick="togglePicker('cmp','age',this)">40代</button>
+        <button class="toggle" data-val="50代" onclick="togglePicker('cmp','age',this)">50代</button>
+        <button class="toggle" data-val="60代" onclick="togglePicker('cmp','age',this)">60代</button>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div class="pop-badge-label">→ ターゲット人口</div>
+      <div class="pop-badge" id="cmp_pop_badge">— 人</div>
+    </div>
+
+    <div class="field-grid cols3" style="margin-bottom:14px;">
+      <div class="field">
+        <label>ターゲット人口（人）</label>
+        <input type="number" id="cmp_pop" placeholder="上で自動入力">
+      </div>
+      <div class="field">
+        <label>利用率（%）</label>
+        <input type="number" id="cmp_rate" placeholder="例：80">
+      </div>
+      <div class="field">
+        <label>年間利用回数（回）</label>
+        <input type="number" id="cmp_freq" placeholder="例：24">
+      </div>
+      <div class="field">
+        <label>平均客単価（円）</label>
+        <input type="number" id="cmp_price" placeholder="例：3500">
+      </div>
+      <div class="field">
+        <label>稼働率・補正係数（%）</label>
+        <input type="number" id="cmp_adj" placeholder="例：90">
+      </div>
+    </div>
+    <button class="add-btn" onclick="addCompareItem()">＋ 追加</button>
+  </div>
+
+  <!-- グラフ -->
+  <div class="card" id="cmp_chart_card" style="display:none;">
+    <div class="card-title">市場規模 比較（億円）</div>
+    <div style="position:relative; min-height:220px;">
+      <canvas id="cmp_bar_chart"></canvas>
+    </div>
+  </div>
+
+  <!-- 表 -->
+  <div class="card" id="cmp_table_card" style="display:none;">
+    <div class="card-title">比較表</div>
+    <div style="overflow-x:auto;">
+      <table class="cmp-table" id="cmp_table">
+        <thead>
+          <tr>
+            <th>お題</th><th>駅</th><th>人口</th><th>利用率</th>
+            <th>回数</th><th>単価</th><th>補正</th><th>市場規模</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="cmp_tbody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
+      <div class="rank-box" id="cmp_rank_1"></div>
+      <div class="rank-box" id="cmp_rank_2"></div>
+      <div class="rank-box" id="cmp_rank_3"></div>
+    </div>
+  </div>
+</div>
+
 </div><!-- /.main -->
 
 <script>
@@ -564,6 +689,11 @@ function applyPopPicker(prefix) {
     document.getElementById('d_pop').value = total;
     calcDetail(); // calcDetail already calls updateCharts
   }
+  if (prefix === 'cmp') {
+    document.getElementById('cmp_pop').value = total;
+    const badge = document.getElementById('cmp_pop_badge');
+    if (badge) badge.textContent = total.toLocaleString() + ' 人';
+  }
   if (prefix === 'pop') renderPop();
 }
 
@@ -648,9 +778,13 @@ function drawDonut(canvasId, segments, legendId) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
   const W = canvas.offsetWidth || 300;
-  canvas.width = W;
-  canvas.height = 180;
+  canvas.width = W * dpr;
+  canvas.height = 180 * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = '180px';
+  ctx.scale(dpr, dpr);
   const cx = W / 2, cy = 82, r = 68, inner = 38;
   const total = segments.reduce((s, x) => s + x.value, 0);
   if (total === 0) return;
@@ -697,9 +831,13 @@ function drawBar(canvasId, bars, legendId) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
   const W = canvas.offsetWidth || 300;
-  canvas.width = W;
-  canvas.height = 180;
+  canvas.width = W * dpr;
+  canvas.height = 180 * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = '180px';
+  ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, W, 180);
   const max = Math.max(...bars.map(b => b.value), 1);
   const padL = 28, padR = 16, padT = 16, padB = 36;
@@ -773,12 +911,126 @@ function updateCharts() {
   ], 'chart_stores_legend');
 }
 
+
+// ── Compare tab ──
+let cmpItems = [];
+const CMP_COLORS = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#06B6D4','#F97316','#84CC16'];
+
+function addCompareItem() {
+  const topic  = document.getElementById('cmp_topic').value.trim();
+  const station= document.getElementById('cmp_station').value;
+  const pop    = +document.getElementById('cmp_pop').value   || 0;
+  const rate   = +document.getElementById('cmp_rate').value  || 0;
+  const freq   = +document.getElementById('cmp_freq').value  || 0;
+  const price  = +document.getElementById('cmp_price').value || 0;
+  const adj    = +document.getElementById('cmp_adj').value   || 100;
+  if (!topic || !pop || !rate || !freq || !price) {
+    alert('お題・人口・利用率・回数・単価を入力してください');
+    return;
+  }
+  const base   = pop * (rate/100) * freq * price;
+  const result = base * (adj/100);
+  cmpItems.push({ topic, station, pop, rate, freq, price, adj, result, id: Date.now() });
+  renderCompare();
+  document.getElementById('cmp_topic').value = '';
+  ['cmp_pop','cmp_rate','cmp_freq','cmp_price','cmp_adj'].forEach(id => document.getElementById(id).value = '');
+  // reset toggles
+  document.querySelectorAll('#cmp_gender_group .toggle').forEach(b => b.classList.remove('active'));
+  document.querySelector('#cmp_gender_group .toggle[data-val="all"]').classList.add('active');
+  document.querySelectorAll('#cmp_age_group .toggle').forEach(b => b.classList.remove('active'));
+  document.querySelector('#cmp_age_group .toggle[data-val="all"]').classList.add('active');
+  cmpUpdatePop();
+}
+
+function deleteCompareItem(id) {
+  cmpItems = cmpItems.filter(x => x.id !== id);
+  renderCompare();
+}
+
+function renderCompare() {
+  const hasData = cmpItems.length > 0;
+  document.getElementById('cmp_chart_card').style.display = hasData ? 'block' : 'none';
+  document.getElementById('cmp_table_card').style.display = hasData ? 'block' : 'none';
+  if (!hasData) return;
+
+  // Table
+  const tbody = document.getElementById('cmp_tbody');
+  tbody.innerHTML = cmpItems.map((it, i) =>
+    `<tr>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CMP_COLORS[i % CMP_COLORS.length]};margin-right:7px;"></span>${it.topic}</td>
+      <td>${it.station}</td>
+      <td>${it.pop.toLocaleString()}</td>
+      <td>${it.rate}%</td>
+      <td>${it.freq}回</td>
+      <td>¥${it.price.toLocaleString()}</td>
+      <td>${it.adj}%</td>
+      <td class="cmp-num">${(it.result/1e8).toFixed(2)}億円</td>
+      <td><button class="del-btn" onclick="deleteCompareItem(${it.id})">削除</button></td>
+    </tr>`
+  ).join('');
+
+  // Ranking badges
+  const sorted = [...cmpItems].sort((a,b) => b.result - a.result);
+  const medals = ['🥇 1位','🥈 2位','🥉 3位'];
+  for (let r = 0; r < 3; r++) {
+    const el = document.getElementById('cmp_rank_' + (r+1));
+    if (sorted[r]) {
+      el.classList.add('show');
+      el.innerHTML = `<div class="rank-num">${medals[r]}</div><div class="rank-name">${sorted[r].topic}（${sorted[r].station}）</div><div class="rank-val">${(sorted[r].result/1e8).toFixed(2)}億円</div>`;
+    } else {
+      el.classList.remove('show');
+      el.innerHTML = '';
+    }
+  }
+
+  // Bar chart
+  const canvas = document.getElementById('cmp_bar_chart');
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.parentElement.offsetWidth || 700;
+  const H = Math.max(220, 60 + cmpItems.length * 44);
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.scale(dpr, dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const maxVal = Math.max(...cmpItems.map(x => x.result), 1);
+  const padL = 110, padR = 80, padT = 16, padB = 20;
+  const chartW = W - padL - padR;
+  const barH = 28, gap = 16;
+
+  cmpItems.forEach((it, i) => {
+    const y = padT + i * (barH + gap);
+    const bw = (it.result / maxVal) * chartW;
+
+    // bar
+    ctx.fillStyle = CMP_COLORS[i % CMP_COLORS.length];
+    ctx.beginPath();
+    ctx.roundRect(padL, y, Math.max(bw, 4), barH, [0, 4, 4, 0]);
+    ctx.fill();
+
+    // label left
+    ctx.fillStyle = '#94A3B8'; ctx.font = '12px Inter,sans-serif'; ctx.textAlign = 'right';
+    const label = it.topic.length > 8 ? it.topic.slice(0,8)+'…' : it.topic;
+    ctx.fillText(label + '  ' + it.station, padL - 6, y + barH/2 + 4);
+
+    // value right
+    ctx.fillStyle = '#E2E8F0'; ctx.font = 'bold 12px JetBrains Mono,monospace'; ctx.textAlign = 'left';
+    ctx.fillText((it.result/1e8).toFixed(2) + '億', padL + bw + 8, y + barH/2 + 4);
+  });
+}
+
+function cmpUpdatePop() {
+  applyPopPicker('cmp');
+}
+
 // ── Init ──
 calcBasic();
 calcDetail();
 calcStore();
 applyPopPicker('d');
 applyPopPicker('s');
+applyPopPicker('cmp');
 setTimeout(updateCharts, 50);
 </script>
 </body>
