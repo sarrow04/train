@@ -112,6 +112,38 @@
   .load-btn { background:none; border:1px solid var(--blue); color:var(--blue); border-radius:6px; padding:5px 14px; font-size:12px; cursor:pointer; transition:all .15s; }
   .load-btn:hover { background:var(--blue); color:#fff; }
 
+
+  /* ── Print / PDF ── */
+  @media print {
+    header, .tabs, #rpt_preview_card > .card-title,
+    .card:not(#rpt_preview_card), p.section-label { display: none !important; }
+    body { background: #fff !important; color: #000 !important; }
+    #panel-report { display: block !important; }
+    .panel { display: block !important; }
+    #rpt_preview_card { border: none !important; padding: 0 !important; box-shadow: none !important; }
+    .rpt-wrap { color: #000 !important; }
+  }
+  /* Report preview styles */
+  .rpt-wrap { font-family: 'Inter', sans-serif; color: #1a1a2e; max-width: 720px; margin: 0 auto; }
+  .rpt-cover { border-bottom: 3px solid #3B82F6; padding-bottom: 20px; margin-bottom: 28px; }
+  .rpt-cover h1 { font-size: 22px; font-weight: 700; color: #0F172A; margin-bottom: 6px; }
+  .rpt-cover .rpt-meta { font-size: 12px; color: #64748B; display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px; }
+  .rpt-section { margin-bottom: 24px; }
+  .rpt-section h2 { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #3B82F6; border-left: 3px solid #3B82F6; padding-left: 10px; margin-bottom: 14px; }
+  .rpt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  .rpt-kpi { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 14px 16px; }
+  .rpt-kpi-label { font-size: 10px; color: #64748B; margin-bottom: 4px; }
+  .rpt-kpi-value { font-size: 20px; font-weight: 700; color: #0F172A; font-family: 'JetBrains Mono', monospace; }
+  .rpt-kpi-unit { font-size: 11px; color: #94A3B8; }
+  .rpt-kpi.highlight { background: #EFF6FF; border-color: #3B82F6; }
+  .rpt-kpi.highlight .rpt-kpi-value { color: #1D4ED8; }
+  .rpt-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .rpt-table th { background: #F1F5F9; text-align: left; padding: 8px 12px; font-size: 11px; color: #475569; font-weight: 600; }
+  .rpt-table td { padding: 9px 12px; border-bottom: 1px solid #E2E8F0; color: #334155; }
+  .rpt-table tr:last-child td { border-bottom: none; }
+  .rpt-comment { background: #FFFBEB; border-left: 3px solid #F59E0B; padding: 12px 16px; font-size: 12px; color: #78350F; border-radius: 0 6px 6px 0; margin-top: 16px; }
+  .rpt-footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #E2E8F0; font-size: 10px; color: #94A3B8; display: flex; justify-content: space-between; }
+
 </style>
 </head>
 <body>
@@ -131,6 +163,7 @@
   <button class="tab" onclick="switchTab('pop',this)">人口データ</button>
   <button class="tab" onclick="switchTab('compare',this)">📊 業種比較</button>
   <button class="tab" onclick="switchTab('saves',this)">💾 保存済み</button>
+  <button class="tab" onclick="switchTab('report',this)">📄 レポート</button>
 </div>
 
 <div class="main">
@@ -580,6 +613,44 @@
   <div id="saves_list"></div>
 </div>
 
+
+<!-- ═══ TAB 7: レポート ═══ -->
+<div id="panel-report" class="panel">
+  <p class="section-label">詳細推定レポート</p>
+
+  <div class="card">
+    <div class="card-title">レポート設定</div>
+    <div class="field-grid">
+      <div class="field">
+        <label>タイトル</label>
+        <input type="text" id="rpt_title" value="フェルミ推定レポート" oninput="previewReport()">
+      </div>
+      <div class="field">
+        <label>作成者名</label>
+        <input type="text" id="rpt_author" placeholder="例：山田 太郎" oninput="previewReport()">
+      </div>
+      <div class="field">
+        <label>クライアント名</label>
+        <input type="text" id="rpt_client" placeholder="例：株式会社〇〇" oninput="previewReport()">
+      </div>
+      <div class="field">
+        <label>補足コメント</label>
+        <input type="text" id="rpt_comment" placeholder="例：阿佐ヶ谷エリアのピザ市場を推計" oninput="previewReport()">
+      </div>
+    </div>
+    <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
+      <button class="add-btn" onclick="previewReport()">👁 プレビュー更新</button>
+      <button class="add-btn" style="background:var(--green);" onclick="printReport()">🖨 印刷 / PDF保存</button>
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div class="card" id="rpt_preview_card">
+    <div class="card-title">プレビュー</div>
+    <div id="rpt_preview"></div>
+  </div>
+</div>
+
 </div><!-- /.main -->
 
 <script>
@@ -699,6 +770,7 @@ function switchTab(name, btn) {
   document.getElementById('panel-' + name).classList.add('active');
   if (name === 'pop') renderPop();
   if (name === 'saves') renderSaves();
+  if (name === 'report') previewReport();
 }
 
 // ── Formatters ──
@@ -1358,6 +1430,103 @@ function renderPop() {
           + '<div class="pop-val">'+filtered[i].pop.toLocaleString()+' 人</div></div>';
   }
   container.innerHTML = html;
+}
+
+
+// ── Report ──
+function fmtRptYen(val) {
+  if (val >= 1e8) return {val:(val/1e8).toFixed(2), unit:'億円'};
+  if (val >= 1e4) return {val:(val/1e4).toFixed(0), unit:'万円'};
+  return {val:val.toLocaleString(), unit:'円'};
+}
+
+function previewReport() {
+  var title   = document.getElementById('rpt_title').value  || 'フェルミ推定レポート';
+  var author  = document.getElementById('rpt_author').value || '—';
+  var client  = document.getElementById('rpt_client').value || '—';
+  var comment = document.getElementById('rpt_comment').value;
+  var today   = new Date().toLocaleDateString('ja-JP', {year:'numeric',month:'long',day:'numeric'});
+
+  // Grab detail tab values
+  var topic   = document.getElementById('d_topic').value    || '—';
+  var station = document.getElementById('d_station').value  || '—';
+  var pop     = +document.getElementById('d_pop').value     || 0;
+  var rate    = +document.getElementById('d_rate').value    || 0;
+  var freq    = +document.getElementById('d_freq').value    || 0;
+  var price   = +document.getElementById('d_price').value   || 0;
+  var adj     = +document.getElementById('d_adj').value     || 0;
+  var ind     = +document.getElementById('d_ind').value     || 0;
+  var chain   = +document.getElementById('d_chain').value   || 0;
+  var newchain= +document.getElementById('d_newchain').value|| 0;
+
+  var base    = pop * (rate/100) * freq * price;
+  var result  = base * (adj/100);
+  var perShop = (ind + chain + newchain) > 0 ? result / (ind + chain + newchain) : 0;
+
+  var mkt   = fmtRptYen(result);
+  var bsMkt = fmtRptYen(base);
+  var ps    = fmtRptYen(perShop);
+
+  var html = '<div class="rpt-wrap">'
+
+  // Cover
+  + '<div class="rpt-cover">'
+  + '<h1>' + title + '</h1>'
+  + '<div class="rpt-meta">'
+  + '<span>📅 作成日：' + today + '</span>'
+  + '<span>👤 作成者：' + author + '</span>'
+  + '<span>🏢 クライアント：' + client + '</span>'
+  + '<span>📍 対象エリア：' + station + '</span>'
+  + '<span>🍽 お題：' + topic + '</span>'
+  + '</div></div>'
+
+  // KPI
+  + '<div class="rpt-section">'
+  + '<h2>推計サマリー</h2>'
+  + '<div class="rpt-grid">'
+  + '<div class="rpt-kpi highlight"><div class="rpt-kpi-label">最終推計市場規模</div><div class="rpt-kpi-value">' + mkt.val + '</div><div class="rpt-kpi-unit">' + mkt.unit + ' / 年</div></div>'
+  + '<div class="rpt-kpi"><div class="rpt-kpi-label">補正前市場規模</div><div class="rpt-kpi-value">' + bsMkt.val + '</div><div class="rpt-kpi-unit">' + bsMkt.unit + ' / 年</div></div>'
+  + '<div class="rpt-kpi"><div class="rpt-kpi-label">1店舗あたり推計</div><div class="rpt-kpi-value">' + ps.val + '</div><div class="rpt-kpi-unit">' + ps.unit + ' / 年</div></div>'
+  + '</div></div>'
+
+  // Input params
+  + '<div class="rpt-section">'
+  + '<h2>推定パラメータ</h2>'
+  + '<table class="rpt-table"><thead><tr><th>項目</th><th>設定値</th><th>備考</th></tr></thead><tbody>'
+  + '<tr><td>対象エリア</td><td>' + station + '</td><td>駅周辺エリア</td></tr>'
+  + '<tr><td>ターゲット人口</td><td>' + pop.toLocaleString() + ' 人</td><td>性別・年代フィルター適用後</td></tr>'
+  + '<tr><td>利用率</td><td>' + rate + ' %</td><td>ターゲット層のうち実際に利用する割合</td></tr>'
+  + '<tr><td>年間利用回数</td><td>' + freq + ' 回</td><td>1人あたりの年間来店回数</td></tr>'
+  + '<tr><td>平均客単価</td><td>¥' + price.toLocaleString() + '</td><td>1回あたりの平均消費額</td></tr>'
+  + '<tr><td>稼働率・補正係数</td><td>' + adj + ' %</td><td>実態への調整係数</td></tr>'
+  + '</tbody></table></div>'
+
+  // Competition
+  + '<div class="rpt-section">'
+  + '<h2>競合状況</h2>'
+  + '<table class="rpt-table"><thead><tr><th>区分</th><th>店舗数</th></tr></thead><tbody>'
+  + '<tr><td>個人店</td><td>' + ind + ' 店</td></tr>'
+  + '<tr><td>チェーン店</td><td>' + chain + ' 店</td></tr>'
+  + '<tr><td>新規チェーン参入</td><td>' + newchain + ' 店</td></tr>'
+  + '<tr><td><strong>合計</strong></td><td><strong>' + (ind+chain+newchain) + ' 店</strong></td></tr>'
+  + '</tbody></table></div>'
+
+  // Comment
+  + (comment ? '<div class="rpt-comment">📝 ' + comment + '</div>' : '')
+
+  // Footer
+  + '<div class="rpt-footer">'
+  + '<span>本レポートはフェルミ推定シートにより自動生成されました</span>'
+  + '<span>' + today + '</span>'
+  + '</div>'
+  + '</div>';
+
+  document.getElementById('rpt_preview').innerHTML = html;
+}
+
+function printReport() {
+  previewReport();
+  setTimeout(function() { window.print(); }, 200);
 }
 
 // ── Init ──
