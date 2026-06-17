@@ -98,6 +98,20 @@
   .sens-delta.down { color:#ef4444; }
   .sens-delta.flat { color:var(--muted); }
 
+
+  /* Saves */
+  .save-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px 24px; margin-bottom:14px; }
+  .save-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+  .save-name { font-size:14px; font-weight:600; color:var(--text); }
+  .save-type { font-size:10px; background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:2px 8px; color:var(--muted); }
+  .save-result { font-family:var(--mono); font-size:24px; font-weight:700; color:var(--blue-light); }
+  .save-params { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; }
+  .save-param { font-size:11px; color:var(--muted); }
+  .save-param span { color:var(--label); font-weight:500; }
+  .save-actions { display:flex; gap:8px; margin-top:12px; }
+  .load-btn { background:none; border:1px solid var(--blue); color:var(--blue); border-radius:6px; padding:5px 14px; font-size:12px; cursor:pointer; transition:all .15s; }
+  .load-btn:hover { background:var(--blue); color:#fff; }
+
 </style>
 </head>
 <body>
@@ -116,6 +130,7 @@
   <button class="tab" onclick="switchTab('store',this)">店舗ベース推定</button>
   <button class="tab" onclick="switchTab('pop',this)">人口データ</button>
   <button class="tab" onclick="switchTab('compare',this)">📊 業種比較</button>
+  <button class="tab" onclick="switchTab('saves',this)">💾 保存済み</button>
 </div>
 
 <div class="main">
@@ -258,7 +273,7 @@
     <div class="result-main">
       <div class="result-label">最終推計結果</div>
       <div class="result-value" id="d_result">13.0</div>
-      <div class="result-unit">億円 / 年</div>
+      <div class="result-unit" id="d_result_unit">億円 / 年</div>
     </div>
     <div class="result-subs">
       <div class="sub-item"><div class="sub-label">ベース市場（補正前）</div><div class="sub-value" id="d_base">—</div></div>
@@ -290,6 +305,13 @@
     </div>
 
     <div id="sens_sliders"></div>
+  </div>
+</div>
+
+  <!-- セーブ -->
+  <div style="display:flex; gap:10px; align-items:center; margin-top:20px; flex-wrap:wrap;">
+    <input type="text" id="d_save_name" placeholder="保存名（例：阿佐ヶ谷ピザ案A）" style="flex:1; min-width:180px;">
+    <button class="add-btn" onclick="saveScenario('detail')">💾 このシナリオを保存</button>
   </div>
 </div>
 
@@ -369,12 +391,19 @@
     <div class="result-main">
       <div class="result-label">最終推計結果</div>
       <div class="result-value" id="s_result">4.9</div>
-      <div class="result-unit">億円 / 年</div>
+      <div class="result-unit" id="s_result_unit">億円 / 年</div>
     </div>
     <div class="result-subs">
       <div class="sub-item"><div class="sub-label">補正前年間売上</div><div class="sub-value" id="s_base">—</div></div>
       <div class="sub-item"><div class="sub-label">1日あたり売上</div><div class="sub-value" id="s_daily">—</div></div>
     </div>
+  </div>
+</div>
+
+  <!-- セーブ -->
+  <div style="display:flex; gap:10px; align-items:center; margin-top:4px; flex-wrap:wrap;">
+    <input type="text" id="s_save_name" placeholder="保存名（例：荻窪店舗案B）" style="flex:1; min-width:180px;">
+    <button class="add-btn" onclick="saveScenario('store')">💾 このシナリオを保存</button>
   </div>
 </div>
 
@@ -537,6 +566,16 @@
   </div>
 </div>
 
+
+<!-- ═══ TAB 6: 保存済みシナリオ ═══ -->
+<div id="panel-saves" class="panel">
+  <p class="section-label">保存済みシナリオ</p>
+  <div id="saves_empty" class="card" style="color:var(--muted); font-size:13px; text-align:center; padding:40px;">
+    保存されたシナリオはまだありません。<br>詳細推定・店舗推定タブから保存できます。
+  </div>
+  <div id="saves_list"></div>
+</div>
+
 </div><!-- /.main -->
 
 <script>
@@ -644,6 +683,22 @@ function fmtYen(val) {
 }
 
 // ── Animated counter ──
+// Smart result: pick best unit (億 or 万) and animate
+function animateResult(elId, rawYen, unitElId) {
+  const el = document.getElementById(elId);
+  const unitEl = unitElId ? document.getElementById(unitElId) : null;
+  let displayVal, unitLabel;
+  if (rawYen >= 1e8) {
+    displayVal = rawYen / 1e8;
+    unitLabel = '億円 / 年';
+  } else {
+    displayVal = rawYen / 1e4;
+    unitLabel = '万円 / 年';
+  }
+  if (unitEl) unitEl.textContent = unitLabel;
+  animateTo(el, displayVal);
+}
+
 function animateTo(el, newVal) {
   const current = parseFloat(el.dataset.val || '0');
   const diff = newVal - current;
@@ -745,7 +800,7 @@ function calcDetail() {
   const newchain = +document.getElementById('d_newchain').value || 0;
   const base = pop * (rate/100) * freq * price;
   const result = base * (adj/100);
-  animateTo(document.getElementById('d_result'), result / 1e8);
+  animateResult('d_result', result, 'd_result_unit');
   document.getElementById('d_base').textContent = fmtYen(base);
   document.getElementById('d_stores').textContent = (ind + chain + newchain) + '店';
   if (typeof updateCharts === 'function') updateCharts();
@@ -763,7 +818,7 @@ function calcStore() {
   const daily = shops * seats * turns * price;
   const yearly = daily * 365;
   const result = yearly * (1 + covid/100) * (1 + econ/100);
-  animateTo(document.getElementById('s_result'), result / 1e8);
+  animateResult('s_result', result, 's_result_unit');
   document.getElementById('s_base').textContent = fmtYen(yearly);
   document.getElementById('s_daily').textContent = fmtYen(daily);
 }
@@ -888,8 +943,7 @@ function drawBar(canvasId, bars, legendId) {
     const y = padT + chartH - barH;
     // bar
     ctx.fillStyle = bar.color;
-    ctx.beginPath();
-    ctx.roundRect(x, y, barW, barH, [4, 4, 0, 0]);
+    roundRect(ctx, x, y, barW, barH, 4);
     ctx.fill();
     // value on top
     ctx.fillStyle = '#E2E8F0'; ctx.font = 'bold 11px JetBrains Mono,monospace'; ctx.textAlign = 'center';
@@ -1046,9 +1100,9 @@ function drawSensChart() {
 
     ctx.fillStyle = color;
     if (isUp) {
-      ctx.beginPath(); ctx.roundRect(midX, y, bw, barH, [0,4,4,0]); ctx.fill();
+      roundRect(ctx, midX, y, bw, barH, 4); ctx.fill();
     } else {
-      ctx.beginPath(); ctx.roundRect(midX - bw, y, bw, barH, [4,0,0,4]); ctx.fill();
+      roundRect(ctx, midX - bw, y, bw, barH, 4); ctx.fill();
     }
 
     // label
@@ -1064,12 +1118,128 @@ function drawSensChart() {
 
   // base label
   const baseLabelEl = document.getElementById('sens_base_label');
-  if (baseLabelEl) baseLabelEl.textContent = (base/1e8).toFixed(2);
+  if (baseLabelEl) baseLabelEl.textContent = base >= 1e8 ? (base/1e8).toFixed(2)+'億' : (base/1e4).toFixed(0)+'万';
 }
 
 function updateSensitivity() {
   buildSensSliders();
   drawSensChart();
+}
+
+
+// ── Save / Load ──
+function saveScenario(type) {
+  const saves = fermiSaves;
+  let scenario = { type, date: new Date().toLocaleDateString('ja-JP'), id: Date.now() };
+
+  if (type === 'detail') {
+    const name = document.getElementById('d_save_name').value.trim() || 'シナリオ ' + (saves.length+1);
+    const pop = +document.getElementById('d_pop').value||0;
+    const rate = +document.getElementById('d_rate').value||0;
+    const freq = +document.getElementById('d_freq').value||0;
+    const price = +document.getElementById('d_price').value||0;
+    const adj = +document.getElementById('d_adj').value||0;
+    const result = pop*(rate/100)*freq*price*(adj/100);
+    scenario = { ...scenario, name, pop, rate, freq, price, adj,
+      station: document.getElementById('d_station').value,
+      topic: document.getElementById('d_topic').value,
+      result };
+  } else {
+    const name = document.getElementById('s_save_name').value.trim() || 'シナリオ ' + (saves.length+1);
+    const shops=+document.getElementById('s_shops').value||0;
+    const seats=+document.getElementById('s_seats').value||0;
+    const turns=+document.getElementById('s_turns').value||0;
+    const price=+document.getElementById('s_price').value||0;
+    const covid=+document.getElementById('s_covid').value||0;
+    const econ=+document.getElementById('s_econ').value||0;
+    const result = shops*seats*turns*price*365*(1+covid/100)*(1+econ/100);
+    scenario = { ...scenario, name, shops, seats, turns, price, covid, econ,
+      station: document.getElementById('s_station').value,
+      topic: document.getElementById('s_topic').value,
+      result };
+  }
+
+  fermiSaves.unshift(scenario);
+  renderSaves();
+
+  // flash feedback
+  const btn = type === 'detail'
+    ? document.querySelector('[onclick="saveScenario('detail')"]')
+    : document.querySelector('[onclick="saveScenario('store')"]');
+  if (btn) { btn.textContent = '✓ 保存しました'; setTimeout(() => btn.textContent = '💾 このシナリオを保存', 1500); }
+}
+
+function deleteScenario(id) {
+  let saves = [...fermiSaves];
+  fermiSaves = fermiSaves.filter(s => s.id !== id);
+  renderSaves();
+}
+
+function loadScenario(id) {
+  const s = fermiSaves.find(x => x.id === id);
+  if (!s) return;
+  if (s.type === 'detail') {
+    document.getElementById('d_topic').value = s.topic || '';
+    document.getElementById('d_station').value = s.station || '';
+    document.getElementById('d_pop').value = s.pop;
+    document.getElementById('d_rate').value = s.rate;
+    document.getElementById('d_freq').value = s.freq;
+    document.getElementById('d_price').value = s.price;
+    document.getElementById('d_adj').value = s.adj;
+    calcDetail();
+    // switch to detail tab
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    document.querySelector('[onclick="switchTab('detail',this)"]').classList.add('active');
+    document.getElementById('panel-detail').classList.add('active');
+  } else {
+    document.getElementById('s_topic').value = s.topic || '';
+    document.getElementById('s_station').value = s.station || '';
+    document.getElementById('s_shops').value = s.shops;
+    document.getElementById('s_seats').value = s.seats;
+    document.getElementById('s_turns').value = s.turns;
+    document.getElementById('s_price').value = s.price;
+    document.getElementById('s_covid').value = s.covid;
+    document.getElementById('s_econ').value = s.econ;
+    calcStore();
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    document.querySelector('[onclick="switchTab('store',this)"]').classList.add('active');
+    document.getElementById('panel-store').classList.add('active');
+  }
+}
+
+function fmtResult(val) {
+  return val >= 1e8 ? (val/1e8).toFixed(2)+'億円' : (val/1e4).toFixed(0)+'万円';
+}
+
+function renderSaves() {
+  const saves = [...fermiSaves];
+  const emptyEl = document.getElementById('saves_empty');
+  const listEl = document.getElementById('saves_list');
+  if (!emptyEl || !listEl) return;
+  if (saves.length === 0) { emptyEl.style.display='block'; listEl.innerHTML=''; return; }
+  emptyEl.style.display = 'none';
+  listEl.innerHTML = saves.map(s => {
+    const params = s.type === 'detail'
+      ? [['人口',s.pop?.toLocaleString()+'人'],['利用率',s.rate+'%'],['回数',s.freq+'回'],['単価','¥'+s.price?.toLocaleString()],['補正',s.adj+'%']]
+      : [['店舗数',s.shops+'店'],['席数',s.seats+'席'],['回転',s.turns+'回'],['単価','¥'+s.price?.toLocaleString()],['コロナ',s.covid+'%'],['経済',s.econ+'%']];
+    return `<div class="save-card">
+      <div class="save-header">
+        <div>
+          <span class="save-name">${s.name}</span>
+          <span class="save-type" style="margin-left:8px;">${s.type==='detail'?'詳細推定':'店舗推定'}</span>
+          <span style="font-size:10px;color:var(--muted);margin-left:8px;">${s.station} · ${s.date}</span>
+        </div>
+        <div class="save-result">${fmtResult(s.result)}</div>
+      </div>
+      <div class="save-params">${params.map(([k,v])=>`<div class="save-param">${k}：<span>${v}</span></div>`).join('')}</div>
+      <div class="save-actions">
+        <button class="load-btn" onclick="loadScenario(${s.id})">↩ このシナリオを読み込む</button>
+        <button class="del-btn" onclick="deleteScenario(${s.id})">削除</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── Compare tab ──
@@ -1165,8 +1335,7 @@ function renderCompare() {
 
     // bar
     ctx.fillStyle = CMP_COLORS[i % CMP_COLORS.length];
-    ctx.beginPath();
-    ctx.roundRect(padL, y, Math.max(bw, 4), barH, [0, 4, 4, 0]);
+    roundRect(ctx, padL, y, Math.max(bw, 4), barH, 4);
     ctx.fill();
 
     // label left
@@ -1192,6 +1361,7 @@ applyPopPicker('d');
 applyPopPicker('s');
 applyPopPicker('cmp');
 setTimeout(() => { updateCharts(); updateSensitivity(); }, 50);
+renderSaves();
 </script>
 </body>
 </html>
