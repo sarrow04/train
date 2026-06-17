@@ -306,12 +306,14 @@
 
     <div id="sens_sliders"></div>
   </div>
-</div>
 
   <!-- セーブ -->
-  <div style="display:flex; gap:10px; align-items:center; margin-top:20px; flex-wrap:wrap;">
-    <input type="text" id="d_save_name" placeholder="保存名（例：阿佐ヶ谷ピザ案A）" style="flex:1; min-width:180px;">
-    <button class="add-btn" onclick="saveScenario('detail')">💾 このシナリオを保存</button>
+  <div class="card" style="margin-top:0;">
+    <div class="card-title">このシナリオを保存</div>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <input type="text" id="d_save_name" placeholder="保存名（例：阿佐ヶ谷ピザ案A）" style="flex:1; min-width:180px;">
+      <button class="add-btn" id="btn_save_detail" onclick="saveScenario('detail')">💾 保存</button>
+    </div>
   </div>
 </div>
 
@@ -398,12 +400,14 @@
       <div class="sub-item"><div class="sub-label">1日あたり売上</div><div class="sub-value" id="s_daily">—</div></div>
     </div>
   </div>
-</div>
 
   <!-- セーブ -->
-  <div style="display:flex; gap:10px; align-items:center; margin-top:4px; flex-wrap:wrap;">
-    <input type="text" id="s_save_name" placeholder="保存名（例：荻窪店舗案B）" style="flex:1; min-width:180px;">
-    <button class="add-btn" onclick="saveScenario('store')">💾 このシナリオを保存</button>
+  <div class="card" style="margin-top:0;">
+    <div class="card-title">このシナリオを保存</div>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <input type="text" id="s_save_name" placeholder="保存名（例：荻窪店舗案B）" style="flex:1; min-width:180px;">
+      <button class="add-btn" id="btn_save_store" onclick="saveScenario('store')">💾 保存</button>
+    </div>
   </div>
 </div>
 
@@ -579,6 +583,9 @@
 </div><!-- /.main -->
 
 <script>
+"use strict";
+
+// ── Population data ──
 const popData = [
   {station:'阿佐ヶ谷',age:'10代以下',gender:'女性',pop:1200},
   {station:'阿佐ヶ谷',age:'10代以下',gender:'男性',pop:1100},
@@ -666,13 +673,32 @@ const popData = [
   {station:'西荻窪',age:'60代',gender:'男性',pop:1625},
 ];
 
+// ── In-memory saves ──
+var fermiSaves = [];
+
+// ── Canvas roundRect polyfill ──
+function roundRect(ctx, x, y, w, h, r) {
+  if (w < 2*r) r = w/2;
+  if (h < 2*r) r = h/2;
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y,   x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x,   y+h, r);
+  ctx.arcTo(x,   y+h, x,   y,   r);
+  ctx.arcTo(x,   y,   x+w, y,   r);
+  ctx.closePath();
+}
+
 // ── Tab switching ──
 function switchTab(name, btn) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  var tabs = document.querySelectorAll('.tab');
+  var panels = document.querySelectorAll('.panel');
+  for (var i=0; i<tabs.length; i++) tabs[i].classList.remove('active');
+  for (var i=0; i<panels.length; i++) panels[i].classList.remove('active');
   btn.classList.add('active');
   document.getElementById('panel-' + name).classList.add('active');
   if (name === 'pop') renderPop();
+  if (name === 'saves') renderSaves();
 }
 
 // ── Formatters ──
@@ -683,11 +709,28 @@ function fmtYen(val) {
 }
 
 // ── Animated counter ──
-// Smart result: pick best unit (億 or 万) and animate
+function animateTo(el, newVal) {
+  var current = parseFloat(el.dataset.val || '0');
+  var diff = newVal - current;
+  var steps = 20;
+  var step = 0;
+  clearInterval(el._timer);
+  el._timer = setInterval(function() {
+    step++;
+    var v = current + diff * (step / steps);
+    el.textContent = v.toLocaleString('ja-JP', {maximumFractionDigits:1});
+    if (step >= steps) {
+      el.textContent = newVal.toLocaleString('ja-JP', {maximumFractionDigits:1});
+      el.dataset.val = newVal;
+      clearInterval(el._timer);
+    }
+  }, 16);
+}
+
 function animateResult(elId, rawYen, unitElId) {
-  const el = document.getElementById(elId);
-  const unitEl = unitElId ? document.getElementById(unitElId) : null;
-  let displayVal, unitLabel;
+  var el = document.getElementById(elId);
+  var unitEl = unitElId ? document.getElementById(unitElId) : null;
+  var displayVal, unitLabel;
   if (rawYen >= 1e8) {
     displayVal = rawYen / 1e8;
     unitLabel = '億円 / 年';
@@ -699,109 +742,96 @@ function animateResult(elId, rawYen, unitElId) {
   animateTo(el, displayVal);
 }
 
-function animateTo(el, newVal) {
-  const current = parseFloat(el.dataset.val || '0');
-  const diff = newVal - current;
-  const steps = 20; let step = 0;
-  clearInterval(el._timer);
-  el._timer = setInterval(() => {
-    step++;
-    const v = current + diff * (step / steps);
-    el.textContent = v.toLocaleString('ja-JP', {maximumFractionDigits:1});
-    if (step >= steps) {
-      el.textContent = newVal.toLocaleString('ja-JP', {maximumFractionDigits:1});
-      el.dataset.val = newVal;
-      clearInterval(el._timer);
-    }
-  }, 16);
-}
-
-// ── Shared: get filtered pop count for a prefix ──
+// ── Population picker helpers ──
 function getFilteredPop(prefix) {
-  const station = document.getElementById(prefix + '_station').value;
-  const genderBtn = document.querySelector('#' + prefix + '_gender_group .toggle.active');
-  const gender = genderBtn ? genderBtn.dataset.val : 'all';
-  const ageAllActive = document.querySelector('#' + prefix + '_age_group .toggle[data-val="all"]').classList.contains('active');
-  const selectedAges = ageAllActive
-    ? null
-    : [...document.querySelectorAll('#' + prefix + '_age_group .toggle.active')].map(b => b.dataset.val);
-
-  return popData.filter(d =>
-    (!station || station === 'all' || d.station === station) &&
-    (gender === 'all' || d.gender === gender) &&
-    (ageAllActive || selectedAges.includes(d.age))
-  ).reduce((s, d) => s + d.pop, 0);
+  var station = document.getElementById(prefix + '_station').value;
+  var genderBtn = document.querySelector('#' + prefix + '_gender_group .toggle.active');
+  var gender = genderBtn ? genderBtn.dataset.val : 'all';
+  var ageAllEl = document.querySelector('#' + prefix + '_age_group .toggle[data-val="all"]');
+  var ageAllActive = ageAllEl ? ageAllEl.classList.contains('active') : true;
+  var selectedAges = [];
+  if (!ageAllActive) {
+    var activeAges = document.querySelectorAll('#' + prefix + '_age_group .toggle.active');
+    for (var i=0; i<activeAges.length; i++) selectedAges.push(activeAges[i].dataset.val);
+  }
+  var total = 0;
+  for (var i=0; i<popData.length; i++) {
+    var d = popData[i];
+    if (station && station !== 'all' && d.station !== station) continue;
+    if (gender !== 'all' && d.gender !== gender) continue;
+    if (!ageAllActive && selectedAges.indexOf(d.age) === -1) continue;
+    total += d.pop;
+  }
+  return total;
 }
 
-// ── Toggle button handler ──
 function togglePicker(prefix, type, btn) {
-  const groupId = '#' + prefix + '_' + type + '_group';
-  const allBtn = document.querySelector(groupId + ' .toggle[data-val="all"]');
-
+  var groupId = '#' + prefix + '_' + type + '_group';
+  var allBtn = document.querySelector(groupId + ' .toggle[data-val="all"]');
   if (type === 'gender') {
-    // single select
-    document.querySelectorAll(groupId + ' .toggle').forEach(b => b.classList.remove('active'));
+    var btns = document.querySelectorAll(groupId + ' .toggle');
+    for (var i=0; i<btns.length; i++) btns[i].classList.remove('active');
     btn.classList.add('active');
   } else {
-    // age: multi select
     if (btn.dataset.val === 'all') {
-      document.querySelectorAll(groupId + ' .toggle').forEach(b => b.classList.remove('active'));
+      var btns = document.querySelectorAll(groupId + ' .toggle');
+      for (var i=0; i<btns.length; i++) btns[i].classList.remove('active');
       btn.classList.add('active');
     } else {
-      allBtn.classList.remove('active');
+      if (allBtn) allBtn.classList.remove('active');
       btn.classList.toggle('active');
-      const anyActive = [...document.querySelectorAll(groupId + ' .toggle')].some(b => b.classList.contains('active'));
-      if (!anyActive) allBtn.classList.add('active');
+      var anyActive = false;
+      var btns = document.querySelectorAll(groupId + ' .toggle');
+      for (var i=0; i<btns.length; i++) if (btns[i].classList.contains('active')) { anyActive = true; break; }
+      if (!anyActive && allBtn) allBtn.classList.add('active');
     }
   }
   applyPopPicker(prefix);
 }
 
-// ── Apply pop to badge (and input for detail tab) ──
 function applyPopPicker(prefix) {
-  const total = getFilteredPop(prefix);
-  const badge = document.getElementById(prefix + '_pop_badge');
+  var total = getFilteredPop(prefix);
+  var badge = document.getElementById(prefix + '_pop_badge');
   if (badge) badge.textContent = total.toLocaleString() + ' 人';
-
   if (prefix === 'd') {
     document.getElementById('d_pop').value = total;
-    calcDetail(); // calcDetail already calls updateCharts
+    calcDetail();
   }
   if (prefix === 'cmp') {
     document.getElementById('cmp_pop').value = total;
-    const badge = document.getElementById('cmp_pop_badge');
-    if (badge) badge.textContent = total.toLocaleString() + ' 人';
   }
   if (prefix === 'pop') renderPop();
 }
 
+function cmpUpdatePop() { applyPopPicker('cmp'); }
+
 // ── Calc: Basic ──
 function calcBasic() {
-  const pop = +document.getElementById('b_pop').value || 0;
-  const freq = +document.getElementById('b_freq').value || 0;
-  const price = +document.getElementById('b_price').value || 0;
-  const share = +document.getElementById('b_share').value || 0;
-  const market = pop * freq * price;
-  const annual = market * (share / 100);
+  var pop   = +document.getElementById('b_pop').value   || 0;
+  var freq  = +document.getElementById('b_freq').value  || 0;
+  var price = +document.getElementById('b_price').value || 0;
+  var share = +document.getElementById('b_share').value || 0;
+  var market = pop * freq * price;
+  var annual = market * (share / 100);
   animateTo(document.getElementById('b_market'), market / 1e4);
-  document.getElementById('b_annual').textContent = fmtYen(annual);
+  document.getElementById('b_annual').textContent  = fmtYen(annual);
   document.getElementById('b_monthly').textContent = fmtYen(annual / 12);
 }
 
 // ── Calc: Detail ──
 function calcDetail() {
-  const pop = +document.getElementById('d_pop').value || 0;
-  const rate = +document.getElementById('d_rate').value || 0;
-  const freq = +document.getElementById('d_freq').value || 0;
-  const price = +document.getElementById('d_price').value || 0;
-  const adj = +document.getElementById('d_adj').value || 0;
-  const ind = +document.getElementById('d_ind').value || 0;
-  const chain = +document.getElementById('d_chain').value || 0;
-  const newchain = +document.getElementById('d_newchain').value || 0;
-  const base = pop * (rate/100) * freq * price;
-  const result = base * (adj/100);
+  var pop      = +document.getElementById('d_pop').value    || 0;
+  var rate     = +document.getElementById('d_rate').value   || 0;
+  var freq     = +document.getElementById('d_freq').value   || 0;
+  var price    = +document.getElementById('d_price').value  || 0;
+  var adj      = +document.getElementById('d_adj').value    || 0;
+  var ind      = +document.getElementById('d_ind').value    || 0;
+  var chain    = +document.getElementById('d_chain').value  || 0;
+  var newchain = +document.getElementById('d_newchain').value || 0;
+  var base   = pop * (rate/100) * freq * price;
+  var result = base * (adj/100);
   animateResult('d_result', result, 'd_result_unit');
-  document.getElementById('d_base').textContent = fmtYen(base);
+  document.getElementById('d_base').textContent   = fmtYen(base);
   document.getElementById('d_stores').textContent = (ind + chain + newchain) + '店';
   if (typeof updateCharts === 'function') updateCharts();
   if (typeof updateSensitivity === 'function') updateSensitivity();
@@ -809,194 +839,151 @@ function calcDetail() {
 
 // ── Calc: Store ──
 function calcStore() {
-  const shops = +document.getElementById('s_shops').value || 0;
-  const seats = +document.getElementById('s_seats').value || 0;
-  const turns = +document.getElementById('s_turns').value || 0;
-  const price = +document.getElementById('s_price').value || 0;
-  const covid = +document.getElementById('s_covid').value || 0;
-  const econ = +document.getElementById('s_econ').value || 0;
-  const daily = shops * seats * turns * price;
-  const yearly = daily * 365;
-  const result = yearly * (1 + covid/100) * (1 + econ/100);
+  var shops = +document.getElementById('s_shops').value || 0;
+  var seats = +document.getElementById('s_seats').value || 0;
+  var turns = +document.getElementById('s_turns').value || 0;
+  var price = +document.getElementById('s_price').value || 0;
+  var covid = +document.getElementById('s_covid').value || 0;
+  var econ  = +document.getElementById('s_econ').value  || 0;
+  var daily  = shops * seats * turns * price;
+  var yearly = daily * 365;
+  var result = yearly * (1 + covid/100) * (1 + econ/100);
   animateResult('s_result', result, 's_result_unit');
-  document.getElementById('s_base').textContent = fmtYen(yearly);
+  document.getElementById('s_base').textContent  = fmtYen(yearly);
   document.getElementById('s_daily').textContent = fmtYen(daily);
-}
-
-// ── Render pop tab ──
-function renderPop() {
-  const station = document.getElementById('pop_station').value;
-  const genderBtn = document.querySelector('#pop_gender_group .toggle.active');
-  const gender = genderBtn ? genderBtn.dataset.val : 'all';
-  const ageAllActive = document.querySelector('#pop_age_group .toggle[data-val="all"]').classList.contains('active');
-  const selectedAges = ageAllActive ? null : [...document.querySelectorAll('#pop_age_group .toggle.active')].map(b => b.dataset.val);
-
-  const filtered = popData.filter(d =>
-    (station === 'all' || d.station === station) &&
-    (gender === 'all' || d.gender === gender) &&
-    (ageAllActive || selectedAges.includes(d.age))
-  );
-  const total = filtered.reduce((s, d) => s + d.pop, 0);
-  animateTo(document.getElementById('pop_total_num'), total);
-
-  const breakdown = document.getElementById('pop_breakdown');
-  if (gender === 'all') {
-    const f = filtered.filter(d => d.gender === '女性').reduce((s,d)=>s+d.pop,0);
-    const m = filtered.filter(d => d.gender === '男性').reduce((s,d)=>s+d.pop,0);
-    breakdown.innerHTML = `<div class="sub-item"><div class="sub-label">女性</div><div class="sub-value">${f.toLocaleString()} 人</div></div><div class="sub-item"><div class="sub-label">男性</div><div class="sub-value">${m.toLocaleString()} 人</div></div>`;
-  } else { breakdown.innerHTML = ''; }
-
-  const container = document.getElementById('pop_table');
-  container.innerHTML = filtered.length === 0
-    ? '<p style="color:var(--muted);font-size:13px;">該当データがありません</p>'
-    : filtered.map(d => `<div class="pop-cell"><div class="pop-key">${d.station} ${d.age} ${d.gender}</div><div class="pop-val">${d.pop.toLocaleString()} 人</div></div>`).join('');
 }
 
 // ── Draw donut chart ──
 function drawDonut(canvasId, segments, legendId) {
-  const canvas = document.getElementById(canvasId);
+  var canvas = document.getElementById(canvasId);
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const dpr = window.devicePixelRatio || 1;
-  const W = canvas.offsetWidth || 300;
+  var ctx = canvas.getContext('2d');
+  var dpr = window.devicePixelRatio || 1;
+  var W = canvas.offsetWidth || 300;
   canvas.width = W * dpr;
   canvas.height = 180 * dpr;
   canvas.style.width = W + 'px';
   canvas.style.height = '180px';
   ctx.scale(dpr, dpr);
-  const cx = W / 2, cy = 82, r = 68, inner = 38;
-  const total = segments.reduce((s, x) => s + x.value, 0);
-  if (total === 0) return;
-  let angle = -Math.PI / 2;
+  var cx = W/2, cy = 82, r = 68, inner = 38;
+  var total = 0;
+  for (var i=0; i<segments.length; i++) total += segments[i].value;
+  if (!total) return;
+  var angle = -Math.PI / 2;
   ctx.clearRect(0, 0, W, 180);
-  segments.forEach(seg => {
-    const sweep = (seg.value / total) * Math.PI * 2;
+  for (var i=0; i<segments.length; i++) {
+    var sweep = (segments[i].value / total) * Math.PI * 2;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, r, angle, angle + sweep);
     ctx.closePath();
-    ctx.fillStyle = seg.color;
+    ctx.fillStyle = segments[i].color;
     ctx.fill();
     angle += sweep;
-  });
-  // inner hole
-  ctx.beginPath();
-  ctx.arc(cx, cy, inner, 0, Math.PI * 2);
-  ctx.fillStyle = '#111827';
-  ctx.fill();
-  // center text
+  }
+  ctx.beginPath(); ctx.arc(cx, cy, inner, 0, Math.PI*2);
+  ctx.fillStyle = '#111827'; ctx.fill();
   ctx.fillStyle = '#E2E8F0';
-  ctx.font = 'bold 13px JetBrains Mono, monospace';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 13px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(total.toLocaleString(), cx, cy - 7);
-  ctx.font = '10px Inter, sans-serif';
-  ctx.fillStyle = '#64748B';
+  ctx.font = '10px sans-serif'; ctx.fillStyle = '#64748B';
   ctx.fillText('合計', cx, cy + 9);
-  // legend
-  const legendEl = document.getElementById(legendId);
+  var legendEl = document.getElementById(legendId);
   if (legendEl) {
-    legendEl.innerHTML = segments.map(seg =>
-      `<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:#94A3B8;">
-        <span style="width:10px;height:10px;border-radius:3px;background:${seg.color};display:inline-block;"></span>
-        ${seg.label}: <strong style="color:#E2E8F0;">${seg.value.toLocaleString()}</strong>
-      </span>`
-    ).join('');
+    var html = '';
+    for (var i=0; i<segments.length; i++) {
+      html += '<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:#94A3B8;">'
+            + '<span style="width:10px;height:10px;border-radius:3px;background:' + segments[i].color + ';display:inline-block;"></span>'
+            + segments[i].label + ': <strong style="color:#E2E8F0;">' + segments[i].value.toLocaleString() + '</strong></span>';
+    }
+    legendEl.innerHTML = html;
   }
 }
 
 // ── Draw bar chart ──
 function drawBar(canvasId, bars, legendId) {
-  const canvas = document.getElementById(canvasId);
+  var canvas = document.getElementById(canvasId);
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const dpr = window.devicePixelRatio || 1;
-  const W = canvas.offsetWidth || 300;
+  var ctx = canvas.getContext('2d');
+  var dpr = window.devicePixelRatio || 1;
+  var W = canvas.offsetWidth || 300;
   canvas.width = W * dpr;
   canvas.height = 180 * dpr;
   canvas.style.width = W + 'px';
   canvas.style.height = '180px';
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, W, 180);
-  const max = Math.max(...bars.map(b => b.value), 1);
-  const padL = 28, padR = 16, padT = 16, padB = 36;
-  const chartW = W - padL - padR;
-  const chartH = 180 - padT - padB;
-  const barW = Math.min(60, chartW / bars.length - 12);
-  const gap = (chartW - barW * bars.length) / (bars.length + 1);
-
-  // grid lines
-  ctx.strokeStyle = '#1E3A5F';
-  ctx.lineWidth = 1;
-  [0, 0.25, 0.5, 0.75, 1].forEach(t => {
-    const y = padT + chartH * (1 - t);
-    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+  var max = 1;
+  for (var i=0; i<bars.length; i++) if (bars[i].value > max) max = bars[i].value;
+  var padL=28, padR=16, padT=16, padB=36;
+  var chartW = W - padL - padR;
+  var chartH = 180 - padT - padB;
+  var barW = Math.min(60, chartW / bars.length - 12);
+  var gap = (chartW - barW * bars.length) / (bars.length + 1);
+  ctx.strokeStyle = '#1E3A5F'; ctx.lineWidth = 1;
+  var gridLines = [0, 0.25, 0.5, 0.75, 1];
+  for (var g=0; g<gridLines.length; g++) {
+    var t = gridLines[g];
+    var gy = padT + chartH * (1 - t);
+    ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(W - padR, gy); ctx.stroke();
     if (t > 0) {
-      ctx.fillStyle = '#64748B'; ctx.font = '9px Inter,sans-serif'; ctx.textAlign = 'right';
-      ctx.fillText(Math.round(max * t), padL - 3, y + 4);
+      ctx.fillStyle = '#64748B'; ctx.font = '9px sans-serif'; ctx.textAlign = 'right';
+      ctx.fillText(Math.round(max * t), padL - 3, gy + 4);
     }
-  });
-
-  bars.forEach((bar, i) => {
-    const x = padL + gap * (i + 1) + barW * i;
-    const barH = (bar.value / max) * chartH;
-    const y = padT + chartH - barH;
-    // bar
-    ctx.fillStyle = bar.color;
-    roundRect(ctx, x, y, barW, barH, 4);
-    ctx.fill();
-    // value on top
-    ctx.fillStyle = '#E2E8F0'; ctx.font = 'bold 11px JetBrains Mono,monospace'; ctx.textAlign = 'center';
-    ctx.fillText(bar.value, x + barW / 2, y - 5);
-    // label below
-    ctx.fillStyle = '#94A3B8'; ctx.font = '10px Inter,sans-serif';
-    ctx.fillText(bar.label, x + barW / 2, padT + chartH + 16);
-  });
-
-  // legend
-  const legendEl = document.getElementById(legendId);
+  }
+  for (var i=0; i<bars.length; i++) {
+    var bx = padL + gap * (i + 1) + barW * i;
+    var bh = (bars[i].value / max) * chartH;
+    var by = padT + chartH - bh;
+    ctx.fillStyle = bars[i].color;
+    roundRect(ctx, bx, by, barW, bh, 4); ctx.fill();
+    ctx.fillStyle = '#E2E8F0'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(bars[i].value, bx + barW/2, by - 5);
+    ctx.fillStyle = '#94A3B8'; ctx.font = '10px sans-serif';
+    ctx.fillText(bars[i].label, bx + barW/2, padT + chartH + 16);
+  }
+  var legendEl = document.getElementById(legendId);
   if (legendEl) {
-    legendEl.innerHTML = bars.map(b =>
-      `<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:#94A3B8;">
-        <span style="width:10px;height:10px;border-radius:3px;background:${b.color};display:inline-block;"></span>
-        ${b.label}: <strong style="color:#E2E8F0;">${b.value}</strong>店
-      </span>`
-    ).join('');
+    var html = '';
+    for (var i=0; i<bars.length; i++) {
+      html += '<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:#94A3B8;">'
+            + '<span style="width:10px;height:10px;border-radius:3px;background:' + bars[i].color + ';display:inline-block;"></span>'
+            + bars[i].label + ': <strong style="color:#E2E8F0;">' + bars[i].value + '</strong>店</span>';
+    }
+    legendEl.innerHTML = html;
   }
 }
 
+// ── Update detail tab charts ──
 function updateCharts() {
-  // 1) 人口比率ドーナツ
-  const station = document.getElementById('d_station').value;
-  const totalPop = station
-    ? popData.filter(d => d.station === station).reduce((s,d) => s+d.pop, 0)
-    : popData.reduce((s,d) => s+d.pop, 0);
-  const targetPop = +document.getElementById('d_pop').value || 0;
-  const otherPop = Math.max(0, totalPop - targetPop);
+  var station = document.getElementById('d_station').value;
+  var totalPop = 0;
+  for (var i=0; i<popData.length; i++) {
+    if (!station || popData[i].station === station) totalPop += popData[i].pop;
+  }
+  var targetPop = +document.getElementById('d_pop').value || 0;
+  var otherPop  = Math.max(0, totalPop - targetPop);
   drawDonut('chart_pop_ratio', [
-    { label: 'ターゲット', value: targetPop, color: '#3B82F6' },
-    { label: 'その他', value: otherPop, color: '#1E3A5F' },
+    {label:'ターゲット', value:targetPop, color:'#3B82F6'},
+    {label:'その他',     value:otherPop,  color:'#1E3A5F'}
   ], 'chart_pop_legend');
-
-  // 2) 店舗構成バー
-  const ind = +document.getElementById('d_ind').value || 0;
-  const chain = +document.getElementById('d_chain').value || 0;
-  const newchain = +document.getElementById('d_newchain').value || 0;
+  var ind      = +document.getElementById('d_ind').value    || 0;
+  var chain    = +document.getElementById('d_chain').value  || 0;
+  var newchain = +document.getElementById('d_newchain').value || 0;
   drawBar('chart_stores', [
-    { label: '個人店', value: ind, color: '#10B981' },
-    { label: 'チェーン', value: chain, color: '#3B82F6' },
-    { label: '新規チェーン', value: newchain, color: '#F59E0B' },
+    {label:'個人店',     value:ind,      color:'#10B981'},
+    {label:'チェーン',   value:chain,    color:'#3B82F6'},
+    {label:'新規チェーン', value:newchain, color:'#F59E0B'}
   ], 'chart_stores_legend');
 }
 
-
-
 // ── Sensitivity analysis ──
-const SENS_PARAMS = [
-  { id:'d_rate',  label:'利用率',     unit:'%',  step:1,  range:20, fmt: v => v.toFixed(0)+'%' },
-  { id:'d_freq',  label:'年間利用回数', unit:'回', step:1,  range:10, fmt: v => v.toFixed(0)+'回' },
-  { id:'d_price', label:'平均客単価',  unit:'円', step:100,range:0.2, fmt: v => '¥'+v.toLocaleString() },
-  { id:'d_adj',   label:'稼働率補正',  unit:'%',  step:1,  range:15, fmt: v => v.toFixed(0)+'%' },
+var SENS_PARAMS = [
+  {id:'d_rate',  label:'利用率',     unit:'%',  step:1,   range:20,  fmt:function(v){return v.toFixed(0)+'%';}},
+  {id:'d_freq',  label:'年間利用回数', unit:'回', step:1,   range:10,  fmt:function(v){return v.toFixed(0)+'回';}},
+  {id:'d_price', label:'平均客単価',  unit:'円', step:100, range:0.3, fmt:function(v){return '¥'+v.toLocaleString();}},
+  {id:'d_adj',   label:'稼働率補正',  unit:'%',  step:1,   range:15,  fmt:function(v){return v.toFixed(0)+'%';}}
 ];
 
 function calcResultFromValues(pop, rate, freq, price, adj) {
@@ -1004,120 +991,107 @@ function calcResultFromValues(pop, rate, freq, price, adj) {
 }
 
 function buildSensSliders() {
-  const container = document.getElementById('sens_sliders');
+  var container = document.getElementById('sens_sliders');
   if (!container) return;
-  container.innerHTML = SENS_PARAMS.map(p => {
-    const base = +document.getElementById(p.id).value || 0;
-    const isPercent = p.range <= 1 ? false : false; // range is absolute for % params
-    return `<div class="sens-row" id="sensrow_${p.id}">
-      <span class="sens-label">${p.label}</span>
-      <span class="sens-range" id="sensval_${p.id}">${p.fmt(base)}</span>
-      <input class="sens-slider" type="range" id="sensslider_${p.id}"
-        min="${Math.max(0, base - p.range * (p.unit==='円' ? base : 1))}"
-        max="${base + p.range * (p.unit==='円' ? base : 1)}"
-        step="${p.step}" value="${base}"
-        oninput="onSensSlider('${p.id}')">
-      <span class="sens-delta flat" id="sensdelta_${p.id}">±0億</span>
-    </div>`;
-  }).join('');
+  var html = '';
+  for (var i=0; i<SENS_PARAMS.length; i++) {
+    var p = SENS_PARAMS[i];
+    var base = +document.getElementById(p.id).value || 0;
+    var rangeVal = p.unit === '円' ? base * p.range : p.range;
+    var minVal = Math.max(0, base - rangeVal);
+    var maxVal = base + rangeVal;
+    html += '<div class="sens-row" id="sensrow_' + p.id + '">'
+          + '<span class="sens-label">' + p.label + '</span>'
+          + '<span class="sens-range" id="sensval_' + p.id + '">' + p.fmt(base) + '</span>'
+          + '<input class="sens-slider" type="range" id="sensslider_' + p.id + '"'
+          + ' min="' + minVal + '" max="' + maxVal + '" step="' + p.step + '" value="' + base + '"'
+          + ' oninput="onSensSlider(\'' + p.id + '\')">'
+          + '<span class="sens-delta flat" id="sensdelta_' + p.id + '">±0億</span>'
+          + '</div>';
+  }
+  container.innerHTML = html;
 }
 
 function onSensSlider(paramId) {
-  const pop   = +document.getElementById('d_pop').value   || 0;
-  const rate  = +document.getElementById('d_rate').value  || 0;
-  const freq  = +document.getElementById('d_freq').value  || 0;
-  const price = +document.getElementById('d_price').value || 0;
-  const adj   = +document.getElementById('d_adj').value   || 0;
-  const baseResult = calcResultFromValues(pop, rate, freq, price, adj);
-
-  const slider = document.getElementById('sensslider_' + paramId);
-  const newVal = +slider.value;
-  const param = SENS_PARAMS.find(p => p.id === paramId);
-
-  // calc new result with this param changed
-  const vals = { d_rate: rate, d_freq: freq, d_price: price, d_adj: adj };
+  var pop   = +document.getElementById('d_pop').value   || 0;
+  var rate  = +document.getElementById('d_rate').value  || 0;
+  var freq  = +document.getElementById('d_freq').value  || 0;
+  var price = +document.getElementById('d_price').value || 0;
+  var adj   = +document.getElementById('d_adj').value   || 0;
+  var baseResult = calcResultFromValues(pop, rate, freq, price, adj);
+  var slider = document.getElementById('sensslider_' + paramId);
+  var newVal = +slider.value;
+  var param = null;
+  for (var i=0; i<SENS_PARAMS.length; i++) if (SENS_PARAMS[i].id === paramId) { param = SENS_PARAMS[i]; break; }
+  var vals = {d_rate:rate, d_freq:freq, d_price:price, d_adj:adj};
   vals[paramId] = newVal;
-  const newResult = calcResultFromValues(pop, vals.d_rate, vals.d_freq, vals.d_price, vals.d_adj);
-  const delta = newResult - baseResult;
-
-  const valEl = document.getElementById('sensval_' + paramId);
-  const deltaEl = document.getElementById('sensdelta_' + paramId);
-  if (valEl) valEl.textContent = param.fmt(newVal);
+  var newResult = calcResultFromValues(pop, vals.d_rate, vals.d_freq, vals.d_price, vals.d_adj);
+  var delta = newResult - baseResult;
+  var valEl   = document.getElementById('sensval_'   + paramId);
+  var deltaEl = document.getElementById('sensdelta_' + paramId);
+  if (valEl && param)  valEl.textContent = param.fmt(newVal);
   if (deltaEl) {
-    const sign = delta > 0 ? '+' : '';
+    var sign = delta > 0 ? '+' : '';
     deltaEl.textContent = sign + (delta/1e8).toFixed(2) + '億';
-    deltaEl.className = 'sens-delta ' + (delta > 0.001 ? 'up' : delta < -0.001 ? 'down' : 'flat');
+    deltaEl.className = 'sens-delta ' + (delta > 1000 ? 'up' : delta < -1000 ? 'down' : 'flat');
   }
   drawSensChart();
 }
 
 function drawSensChart() {
-  const canvas = document.getElementById('sens_bar');
+  var canvas = document.getElementById('sens_bar');
   if (!canvas) return;
-  const dpr = window.devicePixelRatio || 1;
-  const W = canvas.parentElement.offsetWidth || 600;
-  const H = 200;
-  canvas.width = W * dpr; canvas.height = H * dpr;
+  var dpr = window.devicePixelRatio || 1;
+  var W = canvas.parentElement.offsetWidth || 600;
+  var H = 200;
+  canvas.width  = W * dpr; canvas.height = H * dpr;
   canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-  const ctx = canvas.getContext('2d');
+  var ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, W, H);
-
-  const pop   = +document.getElementById('d_pop').value   || 0;
-  const rate  = +document.getElementById('d_rate').value  || 0;
-  const freq  = +document.getElementById('d_freq').value  || 0;
-  const price = +document.getElementById('d_price').value || 0;
-  const adj   = +document.getElementById('d_adj').value   || 0;
-  const base  = calcResultFromValues(pop, rate, freq, price, adj);
-
-  // compute delta per param from slider values
-  const deltas = SENS_PARAMS.map(p => {
-    const slider = document.getElementById('sensslider_' + p.id);
-    const newVal = slider ? +slider.value : +document.getElementById(p.id).value;
-    const vals = { d_rate: rate, d_freq: freq, d_price: price, d_adj: adj };
-    vals[p.id] = newVal;
-    const newResult = calcResultFromValues(pop, vals.d_rate, vals.d_freq, vals.d_price, vals.d_adj);
-    return { label: p.label, delta: newResult - base };
-  });
-
-  const maxAbs = Math.max(...deltas.map(d => Math.abs(d.delta)), 1e6);
-  const padL = 90, padR = 80, padT = 16, padB = 16;
-  const chartW = W - padL - padR;
-  const barH = 28, gap = 14;
-  const midX = padL + chartW / 2;
-
-  // center line
+  var pop   = +document.getElementById('d_pop').value   || 0;
+  var rate  = +document.getElementById('d_rate').value  || 0;
+  var freq  = +document.getElementById('d_freq').value  || 0;
+  var price = +document.getElementById('d_price').value || 0;
+  var adj   = +document.getElementById('d_adj').value   || 0;
+  var base  = calcResultFromValues(pop, rate, freq, price, adj);
+  var deltas = [];
+  for (var i=0; i<SENS_PARAMS.length; i++) {
+    var p = SENS_PARAMS[i];
+    var sliderEl = document.getElementById('sensslider_' + p.id);
+    var nv = sliderEl ? +sliderEl.value : +document.getElementById(p.id).value;
+    var vs = {d_rate:rate, d_freq:freq, d_price:price, d_adj:adj};
+    vs[p.id] = nv;
+    var nr = calcResultFromValues(pop, vs.d_rate, vs.d_freq, vs.d_price, vs.d_adj);
+    deltas.push({label:p.label, delta:nr - base});
+  }
+  var maxAbs = 1e6;
+  for (var i=0; i<deltas.length; i++) if (Math.abs(deltas[i].delta) > maxAbs) maxAbs = Math.abs(deltas[i].delta);
+  var padL=90, padR=80, padT=16, padB=16;
+  var chartW = W - padL - padR;
+  var barH2 = 28, gap2 = 14;
+  var midX = padL + chartW / 2;
   ctx.strokeStyle = '#2a3a4a'; ctx.lineWidth = 1;
   ctx.setLineDash([4,4]);
   ctx.beginPath(); ctx.moveTo(midX, padT); ctx.lineTo(midX, H - padB); ctx.stroke();
   ctx.setLineDash([]);
-
-  deltas.forEach((d, i) => {
-    const y = padT + i * (barH + gap);
-    const bw = (Math.abs(d.delta) / maxAbs) * (chartW / 2);
-    const isUp = d.delta >= 0;
-    const color = d.delta > 1000 ? '#10B981' : d.delta < -1000 ? '#ef4444' : '#3B82F6';
-
+  for (var i=0; i<deltas.length; i++) {
+    var dy = padT + i * (barH2 + gap2);
+    var bw2 = (Math.abs(deltas[i].delta) / maxAbs) * (chartW / 2);
+    var isUp = deltas[i].delta >= 0;
+    var color = deltas[i].delta > 1000 ? '#10B981' : deltas[i].delta < -1000 ? '#ef4444' : '#3B82F6';
     ctx.fillStyle = color;
-    if (isUp) {
-      roundRect(ctx, midX, y, bw, barH, 4); ctx.fill();
-    } else {
-      roundRect(ctx, midX - bw, y, bw, barH, 4); ctx.fill();
-    }
-
-    // label
-    ctx.fillStyle = '#94A3B8'; ctx.font = '11px Inter,sans-serif'; ctx.textAlign = 'right';
-    ctx.fillText(d.label, padL - 6, y + barH/2 + 4);
-
-    // value
-    ctx.fillStyle = color; ctx.font = 'bold 11px JetBrains Mono,monospace';
+    if (isUp) { roundRect(ctx, midX, dy, Math.max(bw2,2), barH2, 4); }
+    else       { roundRect(ctx, midX - bw2, dy, Math.max(bw2,2), barH2, 4); }
+    ctx.fill();
+    ctx.fillStyle = '#94A3B8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(deltas[i].label, padL - 6, dy + barH2/2 + 4);
+    ctx.fillStyle = color; ctx.font = 'bold 11px monospace';
     ctx.textAlign = isUp ? 'left' : 'right';
-    const sign = d.delta > 0 ? '+' : '';
-    ctx.fillText(sign + (d.delta/1e8).toFixed(2)+'億', isUp ? midX + bw + 6 : midX - bw - 6, y + barH/2 + 4);
-  });
-
-  // base label
-  const baseLabelEl = document.getElementById('sens_base_label');
+    var dsign = deltas[i].delta > 0 ? '+' : '';
+    ctx.fillText(dsign + (deltas[i].delta/1e8).toFixed(2)+'億', isUp ? midX+bw2+6 : midX-bw2-6, dy+barH2/2+4);
+  }
+  var baseLabelEl = document.getElementById('sens_base_label');
   if (baseLabelEl) baseLabelEl.textContent = base >= 1e8 ? (base/1e8).toFixed(2)+'億' : (base/1e4).toFixed(0)+'万';
 }
 
@@ -1126,231 +1100,264 @@ function updateSensitivity() {
   drawSensChart();
 }
 
-
-// ── Save / Load ──
-function saveScenario(type) {
-  const saves = fermiSaves;
-  let scenario = { type, date: new Date().toLocaleDateString('ja-JP'), id: Date.now() };
-
-  if (type === 'detail') {
-    const name = document.getElementById('d_save_name').value.trim() || 'シナリオ ' + (saves.length+1);
-    const pop = +document.getElementById('d_pop').value||0;
-    const rate = +document.getElementById('d_rate').value||0;
-    const freq = +document.getElementById('d_freq').value||0;
-    const price = +document.getElementById('d_price').value||0;
-    const adj = +document.getElementById('d_adj').value||0;
-    const result = pop*(rate/100)*freq*price*(adj/100);
-    scenario = { ...scenario, name, pop, rate, freq, price, adj,
-      station: document.getElementById('d_station').value,
-      topic: document.getElementById('d_topic').value,
-      result };
-  } else {
-    const name = document.getElementById('s_save_name').value.trim() || 'シナリオ ' + (saves.length+1);
-    const shops=+document.getElementById('s_shops').value||0;
-    const seats=+document.getElementById('s_seats').value||0;
-    const turns=+document.getElementById('s_turns').value||0;
-    const price=+document.getElementById('s_price').value||0;
-    const covid=+document.getElementById('s_covid').value||0;
-    const econ=+document.getElementById('s_econ').value||0;
-    const result = shops*seats*turns*price*365*(1+covid/100)*(1+econ/100);
-    scenario = { ...scenario, name, shops, seats, turns, price, covid, econ,
-      station: document.getElementById('s_station').value,
-      topic: document.getElementById('s_topic').value,
-      result };
-  }
-
-  fermiSaves.unshift(scenario);
-  renderSaves();
-
-  // flash feedback
-  const btn = type === 'detail'
-    ? document.querySelector('[onclick="saveScenario('detail')"]')
-    : document.querySelector('[onclick="saveScenario('store')"]');
-  if (btn) { btn.textContent = '✓ 保存しました'; setTimeout(() => btn.textContent = '💾 このシナリオを保存', 1500); }
-}
-
-function deleteScenario(id) {
-  let saves = [...fermiSaves];
-  fermiSaves = fermiSaves.filter(s => s.id !== id);
-  renderSaves();
-}
-
-function loadScenario(id) {
-  const s = fermiSaves.find(x => x.id === id);
-  if (!s) return;
-  if (s.type === 'detail') {
-    document.getElementById('d_topic').value = s.topic || '';
-    document.getElementById('d_station').value = s.station || '';
-    document.getElementById('d_pop').value = s.pop;
-    document.getElementById('d_rate').value = s.rate;
-    document.getElementById('d_freq').value = s.freq;
-    document.getElementById('d_price').value = s.price;
-    document.getElementById('d_adj').value = s.adj;
-    calcDetail();
-    // switch to detail tab
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-    document.querySelector('[onclick="switchTab('detail',this)"]').classList.add('active');
-    document.getElementById('panel-detail').classList.add('active');
-  } else {
-    document.getElementById('s_topic').value = s.topic || '';
-    document.getElementById('s_station').value = s.station || '';
-    document.getElementById('s_shops').value = s.shops;
-    document.getElementById('s_seats').value = s.seats;
-    document.getElementById('s_turns').value = s.turns;
-    document.getElementById('s_price').value = s.price;
-    document.getElementById('s_covid').value = s.covid;
-    document.getElementById('s_econ').value = s.econ;
-    calcStore();
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-    document.querySelector('[onclick="switchTab('store',this)"]').classList.add('active');
-    document.getElementById('panel-store').classList.add('active');
-  }
-}
-
-function fmtResult(val) {
-  return val >= 1e8 ? (val/1e8).toFixed(2)+'億円' : (val/1e4).toFixed(0)+'万円';
-}
-
-function renderSaves() {
-  const saves = [...fermiSaves];
-  const emptyEl = document.getElementById('saves_empty');
-  const listEl = document.getElementById('saves_list');
-  if (!emptyEl || !listEl) return;
-  if (saves.length === 0) { emptyEl.style.display='block'; listEl.innerHTML=''; return; }
-  emptyEl.style.display = 'none';
-  listEl.innerHTML = saves.map(s => {
-    const params = s.type === 'detail'
-      ? [['人口',s.pop?.toLocaleString()+'人'],['利用率',s.rate+'%'],['回数',s.freq+'回'],['単価','¥'+s.price?.toLocaleString()],['補正',s.adj+'%']]
-      : [['店舗数',s.shops+'店'],['席数',s.seats+'席'],['回転',s.turns+'回'],['単価','¥'+s.price?.toLocaleString()],['コロナ',s.covid+'%'],['経済',s.econ+'%']];
-    return `<div class="save-card">
-      <div class="save-header">
-        <div>
-          <span class="save-name">${s.name}</span>
-          <span class="save-type" style="margin-left:8px;">${s.type==='detail'?'詳細推定':'店舗推定'}</span>
-          <span style="font-size:10px;color:var(--muted);margin-left:8px;">${s.station} · ${s.date}</span>
-        </div>
-        <div class="save-result">${fmtResult(s.result)}</div>
-      </div>
-      <div class="save-params">${params.map(([k,v])=>`<div class="save-param">${k}：<span>${v}</span></div>`).join('')}</div>
-      <div class="save-actions">
-        <button class="load-btn" onclick="loadScenario(${s.id})">↩ このシナリオを読み込む</button>
-        <button class="del-btn" onclick="deleteScenario(${s.id})">削除</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
 // ── Compare tab ──
-let cmpItems = [];
-const CMP_COLORS = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#06B6D4','#F97316','#84CC16'];
+var CMP_COLORS = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#06B6D4','#F97316','#84CC16'];
+var cmpItems = [];
 
 function addCompareItem() {
-  const topic  = document.getElementById('cmp_topic').value.trim();
-  const station= document.getElementById('cmp_station').value;
-  const pop    = +document.getElementById('cmp_pop').value   || 0;
-  const rate   = +document.getElementById('cmp_rate').value  || 0;
-  const freq   = +document.getElementById('cmp_freq').value  || 0;
-  const price  = +document.getElementById('cmp_price').value || 0;
-  const adj    = +document.getElementById('cmp_adj').value   || 100;
+  var topic   = document.getElementById('cmp_topic').value.trim();
+  var station = document.getElementById('cmp_station').value;
+  var pop     = +document.getElementById('cmp_pop').value   || 0;
+  var rate    = +document.getElementById('cmp_rate').value  || 0;
+  var freq    = +document.getElementById('cmp_freq').value  || 0;
+  var price   = +document.getElementById('cmp_price').value || 0;
+  var adj     = +document.getElementById('cmp_adj').value   || 100;
   if (!topic || !pop || !rate || !freq || !price) {
     alert('お題・人口・利用率・回数・単価を入力してください');
     return;
   }
-  const base   = pop * (rate/100) * freq * price;
-  const result = base * (adj/100);
-  cmpItems.push({ topic, station, pop, rate, freq, price, adj, result, id: Date.now() });
+  var base   = pop * (rate/100) * freq * price;
+  var result = base * (adj/100);
+  cmpItems.push({topic:topic, station:station, pop:pop, rate:rate, freq:freq, price:price, adj:adj, result:result, id:Date.now()});
   renderCompare();
   document.getElementById('cmp_topic').value = '';
-  ['cmp_pop','cmp_rate','cmp_freq','cmp_price','cmp_adj'].forEach(id => document.getElementById(id).value = '');
-  // reset toggles
-  document.querySelectorAll('#cmp_gender_group .toggle').forEach(b => b.classList.remove('active'));
-  document.querySelector('#cmp_gender_group .toggle[data-val="all"]').classList.add('active');
-  document.querySelectorAll('#cmp_age_group .toggle').forEach(b => b.classList.remove('active'));
-  document.querySelector('#cmp_age_group .toggle[data-val="all"]').classList.add('active');
+  var clearIds = ['cmp_pop','cmp_rate','cmp_freq','cmp_price','cmp_adj'];
+  for (var i=0; i<clearIds.length; i++) document.getElementById(clearIds[i]).value = '';
+  var gbns = document.querySelectorAll('#cmp_gender_group .toggle');
+  for (var i=0; i<gbns.length; i++) gbns[i].classList.remove('active');
+  var gall = document.querySelector('#cmp_gender_group .toggle[data-val="all"]');
+  if (gall) gall.classList.add('active');
+  var abns = document.querySelectorAll('#cmp_age_group .toggle');
+  for (var i=0; i<abns.length; i++) abns[i].classList.remove('active');
+  var aall = document.querySelector('#cmp_age_group .toggle[data-val="all"]');
+  if (aall) aall.classList.add('active');
   cmpUpdatePop();
 }
 
 function deleteCompareItem(id) {
-  cmpItems = cmpItems.filter(x => x.id !== id);
+  var next = [];
+  for (var i=0; i<cmpItems.length; i++) if (cmpItems[i].id !== id) next.push(cmpItems[i]);
+  cmpItems = next;
   renderCompare();
 }
 
 function renderCompare() {
-  const hasData = cmpItems.length > 0;
+  var hasData = cmpItems.length > 0;
   document.getElementById('cmp_chart_card').style.display = hasData ? 'block' : 'none';
   document.getElementById('cmp_table_card').style.display = hasData ? 'block' : 'none';
   if (!hasData) return;
-
-  // Table
-  const tbody = document.getElementById('cmp_tbody');
-  tbody.innerHTML = cmpItems.map((it, i) =>
-    `<tr>
-      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CMP_COLORS[i % CMP_COLORS.length]};margin-right:7px;"></span>${it.topic}</td>
-      <td>${it.station}</td>
-      <td>${it.pop.toLocaleString()}</td>
-      <td>${it.rate}%</td>
-      <td>${it.freq}回</td>
-      <td>¥${it.price.toLocaleString()}</td>
-      <td>${it.adj}%</td>
-      <td class="cmp-num">${(it.result/1e8).toFixed(2)}億円</td>
-      <td><button class="del-btn" onclick="deleteCompareItem(${it.id})">削除</button></td>
-    </tr>`
-  ).join('');
-
-  // Ranking badges
-  const sorted = [...cmpItems].sort((a,b) => b.result - a.result);
-  const medals = ['🥇 1位','🥈 2位','🥉 3位'];
-  for (let r = 0; r < 3; r++) {
-    const el = document.getElementById('cmp_rank_' + (r+1));
+  var html = '';
+  for (var i=0; i<cmpItems.length; i++) {
+    var it = cmpItems[i];
+    html += '<tr>'
+      + '<td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + CMP_COLORS[i%CMP_COLORS.length] + ';margin-right:7px;"></span>' + it.topic + '</td>'
+      + '<td>' + it.station + '</td>'
+      + '<td>' + it.pop.toLocaleString() + '</td>'
+      + '<td>' + it.rate + '%</td>'
+      + '<td>' + it.freq + '回</td>'
+      + '<td>¥' + it.price.toLocaleString() + '</td>'
+      + '<td>' + it.adj + '%</td>'
+      + '<td class="cmp-num">' + (it.result/1e8).toFixed(2) + '億円</td>'
+      + '<td><button class="del-btn" onclick="deleteCompareItem(' + it.id + ')">削除</button></td>'
+      + '</tr>';
+  }
+  document.getElementById('cmp_tbody').innerHTML = html;
+  var sorted = cmpItems.slice().sort(function(a,b){ return b.result - a.result; });
+  var medals = ['🥇 1位','🥈 2位','🥉 3位'];
+  for (var r=0; r<3; r++) {
+    var el = document.getElementById('cmp_rank_' + (r+1));
     if (sorted[r]) {
       el.classList.add('show');
-      el.innerHTML = `<div class="rank-num">${medals[r]}</div><div class="rank-name">${sorted[r].topic}（${sorted[r].station}）</div><div class="rank-val">${(sorted[r].result/1e8).toFixed(2)}億円</div>`;
+      el.innerHTML = '<div class="rank-num">' + medals[r] + '</div>'
+        + '<div class="rank-name">' + sorted[r].topic + '（' + sorted[r].station + '）</div>'
+        + '<div class="rank-val">' + (sorted[r].result/1e8).toFixed(2) + '億円</div>';
     } else {
       el.classList.remove('show');
       el.innerHTML = '';
     }
   }
-
-  // Bar chart
-  const canvas = document.getElementById('cmp_bar_chart');
-  const dpr = window.devicePixelRatio || 1;
-  const W = canvas.parentElement.offsetWidth || 700;
-  const H = Math.max(220, 60 + cmpItems.length * 44);
-  canvas.width = W * dpr; canvas.height = H * dpr;
-  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  var canvas = document.getElementById('cmp_bar_chart');
+  if (!canvas) return;
+  var dpr = window.devicePixelRatio || 1;
+  var W = canvas.parentElement.offsetWidth || 700;
+  var H = Math.max(220, 60 + cmpItems.length * 44);
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+  var ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, W, H);
-
-  const maxVal = Math.max(...cmpItems.map(x => x.result), 1);
-  const padL = 110, padR = 80, padT = 16, padB = 20;
-  const chartW = W - padL - padR;
-  const barH = 28, gap = 16;
-
-  cmpItems.forEach((it, i) => {
-    const y = padT + i * (barH + gap);
-    const bw = (it.result / maxVal) * chartW;
-
-    // bar
-    ctx.fillStyle = CMP_COLORS[i % CMP_COLORS.length];
-    roundRect(ctx, padL, y, Math.max(bw, 4), barH, 4);
-    ctx.fill();
-
-    // label left
-    ctx.fillStyle = '#94A3B8'; ctx.font = '12px Inter,sans-serif'; ctx.textAlign = 'right';
-    const label = it.topic.length > 8 ? it.topic.slice(0,8)+'…' : it.topic;
-    ctx.fillText(label + '  ' + it.station, padL - 6, y + barH/2 + 4);
-
-    // value right
-    ctx.fillStyle = '#E2E8F0'; ctx.font = 'bold 12px JetBrains Mono,monospace'; ctx.textAlign = 'left';
-    ctx.fillText((it.result/1e8).toFixed(2) + '億', padL + bw + 8, y + barH/2 + 4);
-  });
+  ctx.clearRect(0,0,W,H);
+  var maxVal = 1;
+  for (var i=0; i<cmpItems.length; i++) if (cmpItems[i].result > maxVal) maxVal = cmpItems[i].result;
+  var padL=110, padR=80, padT=16, padB=20;
+  var chartW = W - padL - padR;
+  var barH3=28, gap3=16;
+  for (var i=0; i<cmpItems.length; i++) {
+    var it = cmpItems[i];
+    var cy2 = padT + i*(barH3+gap3);
+    var bw3 = (it.result / maxVal) * chartW;
+    ctx.fillStyle = CMP_COLORS[i%CMP_COLORS.length];
+    roundRect(ctx, padL, cy2, Math.max(bw3,4), barH3, 4); ctx.fill();
+    ctx.fillStyle = '#94A3B8'; ctx.font = '12px sans-serif'; ctx.textAlign = 'right';
+    var lbl = it.topic.length > 8 ? it.topic.slice(0,8)+'…' : it.topic;
+    ctx.fillText(lbl + '  ' + it.station, padL-6, cy2+barH3/2+4);
+    ctx.fillStyle = '#E2E8F0'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'left';
+    ctx.fillText((it.result/1e8).toFixed(2)+'億', padL+bw3+8, cy2+barH3/2+4);
+  }
 }
 
-function cmpUpdatePop() {
-  applyPopPicker('cmp');
+// ── Save / Load ──
+function fmtResult(val) {
+  return val >= 1e8 ? (val/1e8).toFixed(2)+'億円' : (val/1e4).toFixed(0)+'万円';
+}
+
+function saveScenario(type) {
+  var scenario = {type:type, date:new Date().toLocaleDateString('ja-JP'), id:Date.now()};
+  if (type === 'detail') {
+    var name = document.getElementById('d_save_name').value.trim() || 'シナリオ '+(fermiSaves.length+1);
+    var pop   = +document.getElementById('d_pop').value   || 0;
+    var rate  = +document.getElementById('d_rate').value  || 0;
+    var freq  = +document.getElementById('d_freq').value  || 0;
+    var price = +document.getElementById('d_price').value || 0;
+    var adj   = +document.getElementById('d_adj').value   || 0;
+    scenario.name    = name;
+    scenario.station = document.getElementById('d_station').value;
+    scenario.topic   = document.getElementById('d_topic').value;
+    scenario.pop=pop; scenario.rate=rate; scenario.freq=freq; scenario.price=price; scenario.adj=adj;
+    scenario.result  = pop*(rate/100)*freq*price*(adj/100);
+  } else {
+    var name  = document.getElementById('s_save_name').value.trim() || 'シナリオ '+(fermiSaves.length+1);
+    var shops = +document.getElementById('s_shops').value || 0;
+    var seats = +document.getElementById('s_seats').value || 0;
+    var turns = +document.getElementById('s_turns').value || 0;
+    var price = +document.getElementById('s_price').value || 0;
+    var covid = +document.getElementById('s_covid').value || 0;
+    var econ  = +document.getElementById('s_econ').value  || 0;
+    scenario.name    = name;
+    scenario.station = document.getElementById('s_station').value;
+    scenario.topic   = document.getElementById('s_topic').value;
+    scenario.shops=shops; scenario.seats=seats; scenario.turns=turns;
+    scenario.price=price; scenario.covid=covid; scenario.econ=econ;
+    scenario.result = shops*seats*turns*price*365*(1+covid/100)*(1+econ/100);
+  }
+  fermiSaves.unshift(scenario);
+  renderSaves();
+  var btnId = type === 'detail' ? 'btn_save_detail' : 'btn_save_store';
+  var btn = document.getElementById(btnId);
+  if (btn) { btn.textContent = '✓ 保存しました'; setTimeout(function(){ btn.textContent = '💾 このシナリオを保存'; }, 1500); }
+}
+
+function deleteScenario(id) {
+  var next = [];
+  for (var i=0; i<fermiSaves.length; i++) if (fermiSaves[i].id !== id) next.push(fermiSaves[i]);
+  fermiSaves = next;
+  renderSaves();
+}
+
+function loadScenario(id) {
+  var s = null;
+  for (var i=0; i<fermiSaves.length; i++) if (fermiSaves[i].id === id) { s = fermiSaves[i]; break; }
+  if (!s) return;
+  var tabs = document.querySelectorAll('.tab');
+  var panels = document.querySelectorAll('.panel');
+  for (var i=0; i<tabs.length; i++) tabs[i].classList.remove('active');
+  for (var i=0; i<panels.length; i++) panels[i].classList.remove('active');
+  if (s.type === 'detail') {
+    document.getElementById('d_topic').value   = s.topic   || '';
+    document.getElementById('d_station').value = s.station || '';
+    document.getElementById('d_pop').value     = s.pop;
+    document.getElementById('d_rate').value    = s.rate;
+    document.getElementById('d_freq').value    = s.freq;
+    document.getElementById('d_price').value   = s.price;
+    document.getElementById('d_adj').value     = s.adj;
+    calcDetail();
+    document.querySelector('[onclick="switchTab(\'detail\',this)"]').classList.add('active');
+    document.getElementById('panel-detail').classList.add('active');
+  } else {
+    document.getElementById('s_topic').value   = s.topic   || '';
+    document.getElementById('s_station').value = s.station || '';
+    document.getElementById('s_shops').value   = s.shops;
+    document.getElementById('s_seats').value   = s.seats;
+    document.getElementById('s_turns').value   = s.turns;
+    document.getElementById('s_price').value   = s.price;
+    document.getElementById('s_covid').value   = s.covid;
+    document.getElementById('s_econ').value    = s.econ;
+    calcStore();
+    document.querySelector('[onclick="switchTab(\'store\',this)"]').classList.add('active');
+    document.getElementById('panel-store').classList.add('active');
+  }
+}
+
+function renderSaves() {
+  var emptyEl = document.getElementById('saves_empty');
+  var listEl  = document.getElementById('saves_list');
+  if (!emptyEl || !listEl) return;
+  if (fermiSaves.length === 0) { emptyEl.style.display='block'; listEl.innerHTML=''; return; }
+  emptyEl.style.display = 'none';
+  var html = '';
+  for (var i=0; i<fermiSaves.length; i++) {
+    var s = fermiSaves[i];
+    var params = s.type === 'detail'
+      ? [['人口',(s.pop||0).toLocaleString()+'人'],['利用率',s.rate+'%'],['回数',s.freq+'回'],['単価','¥'+(s.price||0).toLocaleString()],['補正',s.adj+'%']]
+      : [['店舗数',s.shops+'店'],['席数',s.seats+'席'],['回転',s.turns+'回'],['単価','¥'+(s.price||0).toLocaleString()],['コロナ',s.covid+'%'],['経済',s.econ+'%']];
+    var paramHtml = '';
+    for (var j=0; j<params.length; j++) paramHtml += '<div class="save-param">' + params[j][0] + '：<span>' + params[j][1] + '</span></div>';
+    html += '<div class="save-card">'
+      + '<div class="save-header">'
+      + '<div><span class="save-name">' + s.name + '</span>'
+      + '<span class="save-type" style="margin-left:8px;">' + (s.type==='detail'?'詳細推定':'店舗推定') + '</span>'
+      + '<span style="font-size:10px;color:var(--muted);margin-left:8px;">' + s.station + ' · ' + s.date + '</span></div>'
+      + '<div class="save-result">' + fmtResult(s.result) + '</div>'
+      + '</div>'
+      + '<div class="save-params">' + paramHtml + '</div>'
+      + '<div class="save-actions">'
+      + '<button class="load-btn" onclick="loadScenario(' + s.id + ')">📂 読み込む</button>'
+      + '<button class="del-btn" onclick="deleteScenario(' + s.id + ')">削除</button>'
+      + '</div></div>';
+  }
+  listEl.innerHTML = html;
+}
+
+// ── Population tab ──
+function renderPop() {
+  var station = document.getElementById('pop_station').value;
+  var genderBtn = document.querySelector('#pop_gender_group .toggle.active');
+  var gender = genderBtn ? genderBtn.dataset.val : 'all';
+  var ageAllEl = document.querySelector('#pop_age_group .toggle[data-val="all"]');
+  var ageAllActive = ageAllEl ? ageAllEl.classList.contains('active') : true;
+  var selectedAges = [];
+  if (!ageAllActive) {
+    var activeAges = document.querySelectorAll('#pop_age_group .toggle.active');
+    for (var i=0; i<activeAges.length; i++) selectedAges.push(activeAges[i].dataset.val);
+  }
+  var filtered = [];
+  for (var i=0; i<popData.length; i++) {
+    var d = popData[i];
+    if (station !== 'all' && d.station !== station) continue;
+    if (gender !== 'all' && d.gender !== gender) continue;
+    if (!ageAllActive && selectedAges.indexOf(d.age) === -1) continue;
+    filtered.push(d);
+  }
+  var total = 0;
+  for (var i=0; i<filtered.length; i++) total += filtered[i].pop;
+  animateTo(document.getElementById('pop_total_num'), total);
+  var breakdown = document.getElementById('pop_breakdown');
+  if (gender === 'all') {
+    var f=0, m=0;
+    for (var i=0; i<filtered.length; i++) {
+      if (filtered[i].gender==='女性') f+=filtered[i].pop;
+      else m+=filtered[i].pop;
+    }
+    breakdown.innerHTML = '<div class="sub-item"><div class="sub-label">女性</div><div class="sub-value">'+f.toLocaleString()+' 人</div></div>'
+      + '<div class="sub-item"><div class="sub-label">男性</div><div class="sub-value">'+m.toLocaleString()+' 人</div></div>';
+  } else { breakdown.innerHTML = ''; }
+  var container = document.getElementById('pop_table');
+  if (filtered.length === 0) { container.innerHTML = '<p style="color:var(--muted);font-size:13px;">該当データがありません</p>'; return; }
+  var html = '';
+  for (var i=0; i<filtered.length; i++) {
+    html += '<div class="pop-cell"><div class="pop-key">'+filtered[i].station+' '+filtered[i].age+' '+filtered[i].gender+'</div>'
+          + '<div class="pop-val">'+filtered[i].pop.toLocaleString()+' 人</div></div>';
+  }
+  container.innerHTML = html;
 }
 
 // ── Init ──
@@ -1360,7 +1367,10 @@ calcStore();
 applyPopPicker('d');
 applyPopPicker('s');
 applyPopPicker('cmp');
-setTimeout(() => { updateCharts(); updateSensitivity(); }, 50);
+setTimeout(function() {
+  try { updateCharts(); } catch(e) { console.error('charts:', e); }
+  try { updateSensitivity(); } catch(e) { console.error('sens:', e); }
+}, 80);
 renderSaves();
 </script>
 </body>
