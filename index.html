@@ -115,13 +115,16 @@
 
   /* ── Print / PDF ── */
   @media print {
-    header, .tabs, #rpt_preview_card > .card-title,
-    .card:not(#rpt_preview_card), p.section-label { display: none !important; }
-    body { background: #fff !important; color: #000 !important; }
+    header, .tabs, p.section-label,
+    .card, .main > * { display: none !important; }
+    body { background: #fff !important; color: #000 !important; margin: 0; }
+    .panel { display: none !important; }
     #panel-report { display: block !important; }
-    .panel { display: block !important; }
-    #rpt_preview_card { border: none !important; padding: 0 !important; box-shadow: none !important; }
+    #rpt_preview_card { display: block !important; border: none !important; padding: 0 !important; background: transparent !important; }
+    #rpt_preview_card > .card-title { display: none !important; }
+    #rpt_preview { display: block !important; }
     .rpt-wrap { color: #000 !important; }
+    .main { padding: 0 !important; max-width: 100% !important; }
   }
   /* Report preview styles */
   .rpt-wrap { font-family: 'Inter', sans-serif; color: #1a1a2e; max-width: 720px; margin: 0 auto; }
